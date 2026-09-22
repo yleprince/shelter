@@ -7,8 +7,9 @@ import type { Enemy } from './Enemy';
 
 export type FireHandler = (tower: Tower, target: Enemy) => void;
 
-const BASE_SCALE_PER_LEVEL = 0.06;
-const BASE_TINTS = [0xffffff, 0xd8e8ff, 0xb8f0c0, 0xffd89a, 0xff9a9a];
+// Small enough that a Lv8 base still fits its tile.
+const BASE_SCALE_PER_LEVEL = 0.035;
+const BASE_TINTS = [0xffffff, 0xd8e8ff, 0xb8f0c0, 0xffd89a, 0xff9a9a, 0x9ae0ff, 0xe0a8ff, 0xfff2a8];
 
 export class Tower {
   readonly progress = new TowerProgress();

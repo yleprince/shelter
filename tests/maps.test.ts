@@ -1,23 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import { GRID_COLS, GRID_ROWS, HUD_ROWS, TILE_SIZE } from '../src/config';
-import { MAPS, shelterTile } from '../src/data/maps';
+import { GRID_COLS, GRID_ROWS, HUD_ROWS, STATUS_ROWS, TILE_SIZE } from '../src/config';
+import { MAPS, shelterTile, type MapDefinition } from '../src/data/maps';
 import { MapGrid } from '../src/systems/MapGrid';
+
+const gridFor = (map: MapDefinition) => new MapGrid(GRID_COLS, GRID_ROWS, TILE_SIZE, map.waypoints, HUD_ROWS, STATUS_ROWS);
 
 describe.each(MAPS)('map $name', (map) => {
   it('has orthogonal segments', () => {
-    expect(() => new MapGrid(GRID_COLS, GRID_ROWS, TILE_SIZE, map.waypoints, HUD_ROWS)).not.toThrow();
+    expect(() => gridFor(map)).not.toThrow();
   });
 
-  it('starts off-map and ends at an in-bounds shelter below the HUD', () => {
-    const grid = new MapGrid(GRID_COLS, GRID_ROWS, TILE_SIZE, map.waypoints, HUD_ROWS);
+  it('starts off-map and ends at an in-bounds shelter in the playable rows', () => {
+    const grid = gridFor(map);
     expect(grid.isInBounds(map.waypoints[0])).toBe(false);
-    const shelter = shelterTile(map);
-    expect(grid.isInBounds(shelter)).toBe(true);
-    expect(shelter.row).toBeGreaterThanOrEqual(HUD_ROWS);
+    expect(grid.isPlayable(shelterTile(map))).toBe(true);
   });
 
-  it('keeps the whole path out from under the HUD', () => {
-    for (const { row } of map.waypoints) expect(row).toBeGreaterThanOrEqual(HUD_ROWS);
+  it('keeps the whole path out of the HUD and the status line', () => {
+    for (const { row } of map.waypoints) {
+      expect(row).toBeGreaterThanOrEqual(HUD_ROWS);
+      expect(row).toBeLessThan(GRID_ROWS - STATUS_ROWS);
+    }
   });
 });
 

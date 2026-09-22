@@ -3,20 +3,39 @@ import { TILE_SIZE } from '../config';
 import type { EnemyKind } from '../data/enemyTiers';
 import { ENEMY_TEXTURES, TEXTURES, TOWER_GUN_TEXTURES } from '../data/textures';
 
+type EnemyShape = 'round' | 'horned' | 'ringed' | 'boss' | 'elongated' | 'plated' | 'lobed';
+
 interface EnemyLook {
-  size: number;
+  shape: EnemyShape;
+  width: number;
+  height: number;
   body: number;
   eyes: number;
 }
 
-// Size and colour both climb with the tier so the mix is readable at a glance.
+const round = (size: number, body: number, eyes: number, shape: EnemyShape = 'round'): EnemyLook => ({
+  shape,
+  width: size,
+  height: size,
+  body,
+  eyes,
+});
+
+// Tiers climb in size and colour so the mix is readable at a glance; specials get their
+// own silhouette, not just a tint, since their traits change how to fight them.
 const ENEMY_LOOKS: Record<EnemyKind, EnemyLook> = {
-  T1: { size: 22, body: 0x7fa34a, eyes: 0xd94c3d },
-  T2: { size: 24, body: 0xc9a227, eyes: 0x1a1a1a },
-  T3: { size: 26, body: 0x8a5fb5, eyes: 0xffd166 },
-  T4: { size: 26, body: 0x3f8fc9, eyes: 0xffffff },
-  T5: { size: 30, body: 0xa33b2f, eyes: 0xffd166 },
-  boss: { size: 40, body: 0x2a2a2a, eyes: 0xff3b2f },
+  T1: round(22, 0x7fa34a, 0xd94c3d),
+  T2: round(24, 0xc9a227, 0x1a1a1a),
+  T3: round(26, 0x8a5fb5, 0xffd166),
+  T4: round(26, 0x3f8fc9, 0xffffff),
+  T5: round(30, 0xa33b2f, 0xffd166),
+  T6: round(31, 0x2f8a78, 0xffd166),
+  T7: round(33, 0xb5642f, 0xffffff, 'horned'),
+  T8: round(35, 0x5a2f8a, 0xff6b5b, 'ringed'),
+  boss: round(40, 0x2a2a2a, 0xff3b2f, 'boss'),
+  runner: { shape: 'elongated', width: 30, height: 14, body: 0xd4e157, eyes: 0x1a1a1a },
+  armored: { shape: 'plated', width: 26, height: 26, body: 0x8a8f94, eyes: 0xff6b5b },
+  splitter: { shape: 'lobed', width: 32, height: 22, body: 0xc75b8f, eyes: 0xffffff },
 };
 
 interface GunLook {
@@ -31,6 +50,9 @@ const GUN_LOOKS: readonly GunLook[] = [
   { barrels: 2, length: 14, color: 0x8fd49a },
   { barrels: 2, length: 16, color: 0xffb347 },
   { barrels: 3, length: 16, color: 0xff6b5b },
+  { barrels: 3, length: 18, color: 0x9ae0ff },
+  { barrels: 4, length: 18, color: 0xe0a8ff },
+  { barrels: 4, length: 20, color: 0xfff2a8 },
 ];
 
 // Placeholder art is drawn procedurally so the game is playable without any asset files.
@@ -43,6 +65,7 @@ export class BootScene extends Phaser.Scene {
   create(): void {
     this.makeGroundTile();
     this.makePathTile();
+    this.makeGravelTile();
     this.makeTower();
     this.makeEnemies();
     this.makeProjectile();
@@ -80,6 +103,17 @@ export class BootScene extends Phaser.Scene {
     });
   }
 
+  private makeGravelTile(): void {
+    const rng = new Phaser.Math.RandomDataGenerator(['gravel']);
+    this.draw(TEXTURES.gravel, TILE_SIZE, TILE_SIZE, (g) => {
+      g.fillStyle(0x6e6a60).fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+      for (let i = 0; i < 28; i++) {
+        g.fillStyle(rng.pick([0x8f8a7e, 0x55524a, 0xa39e90]));
+        g.fillCircle(rng.between(2, TILE_SIZE - 2), rng.between(2, TILE_SIZE - 2), rng.between(1, 3));
+      }
+    });
+  }
+
   private makeTower(): void {
     const size = 32;
     this.draw(TEXTURES.towerBase, size, size, (g) => {
@@ -102,19 +136,7 @@ export class BootScene extends Phaser.Scene {
 
   private makeEnemies(): void {
     for (const [kind, look] of Object.entries(ENEMY_LOOKS) as [EnemyKind, EnemyLook][]) {
-      const { size } = look;
-      const eyeOffset = size / 6;
-      const eyeRadius = Math.max(2, size / 12);
-      this.draw(ENEMY_TEXTURES[kind], size, size, (g) => {
-        g.fillStyle(0x1a1a1a).fillCircle(size / 2, size / 2, size / 2);
-        g.fillStyle(look.body).fillCircle(size / 2, size / 2, size / 2 - 2);
-        g.fillStyle(look.eyes)
-          .fillCircle(size / 2 - eyeOffset, size / 2 - 2, eyeRadius)
-          .fillCircle(size / 2 + eyeOffset, size / 2 - 2, eyeRadius);
-        if (kind === 'boss') {
-          g.lineStyle(3, 0xff3b2f).strokeCircle(size / 2, size / 2, size / 2 - 2);
-        }
-      });
+      this.draw(ENEMY_TEXTURES[kind], look.width, look.height, (g) => paintEnemy(g, look));
     }
   }
 
@@ -133,5 +155,52 @@ export class BootScene extends Phaser.Scene {
       g.fillStyle(0x1a1a1a).fillRect(size / 2 - 6, size - 16, 12, 14);
       g.fillStyle(0xc9a227).fillRect(6, 14, 6, 6).fillRect(size - 12, 14, 6, 6);
     });
+  }
+}
+
+function paintEnemy(g: Phaser.GameObjects.Graphics, look: EnemyLook): void {
+  const { width: w, height: h } = look;
+  const cx = w / 2;
+  const cy = h / 2;
+  const eyeRadius = Math.max(2, Math.min(w, h) / 12);
+  let eyeY = cy - 2;
+  let eyeOffset = w / 6;
+
+  switch (look.shape) {
+    case 'elongated':
+      g.fillStyle(0x1a1a1a).fillEllipse(cx, cy, w, h);
+      g.fillStyle(look.body).fillEllipse(cx, cy, w - 4, h - 4);
+      eyeY = cy - 1;
+      eyeOffset = w / 5;
+      break;
+    case 'plated':
+      g.fillStyle(0x1a1a1a).fillRect(0, 0, w, h);
+      g.fillStyle(look.body).fillRect(2, 2, w - 4, h - 4);
+      g.lineStyle(2, 0x5a5e62).lineBetween(2, h / 2 + 3, w - 2, h / 2 + 3).lineBetween(cx, h / 2 + 3, cx, h - 2);
+      g.fillStyle(0xd0d4d8).fillRect(4, 4, 2, 2).fillRect(w - 6, 4, 2, 2).fillRect(4, h - 6, 2, 2).fillRect(w - 6, h - 6, 2, 2);
+      break;
+    case 'lobed': {
+      const r = h / 2;
+      g.fillStyle(0x1a1a1a).fillCircle(r, cy, r).fillCircle(w - r, cy, r);
+      g.fillStyle(look.body).fillCircle(r, cy, r - 2).fillCircle(w - r, cy, r - 2);
+      g.lineStyle(1, 0x1a1a1a, 0.6).lineBetween(cx, 3, cx, h - 3);
+      eyeOffset = w / 4;
+      break;
+    }
+    default:
+      g.fillStyle(0x1a1a1a).fillCircle(cx, cy, w / 2);
+      g.fillStyle(look.body).fillCircle(cx, cy, w / 2 - 2);
+  }
+
+  g.fillStyle(look.eyes).fillCircle(cx - eyeOffset, eyeY, eyeRadius).fillCircle(cx + eyeOffset, eyeY, eyeRadius);
+
+  if (look.shape === 'horned') {
+    g.fillStyle(0xe0d6b8)
+      .fillTriangle(cx - w / 4 - 3, 6, cx - w / 4 + 3, 6, cx - w / 4, 0)
+      .fillTriangle(cx + w / 4 - 3, 6, cx + w / 4 + 3, 6, cx + w / 4, 0);
+  } else if (look.shape === 'ringed') {
+    g.lineStyle(2, 0xffd166).strokeCircle(cx, cy, w / 2 - 4);
+  } else if (look.shape === 'boss') {
+    g.lineStyle(3, 0xff3b2f).strokeCircle(cx, cy, w / 2 - 2);
   }
 }

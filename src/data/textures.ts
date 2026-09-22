@@ -1,15 +1,17 @@
 import type { EnemyKind } from './enemyTiers';
+import { TOWER_LEVELS } from './towerLevels';
 
 export const TEXTURES = {
   ground: 'tile-ground',
   path: 'tile-path',
+  gravel: 'tile-gravel',
   towerBase: 'tower-base',
   projectile: 'projectile',
   shelter: 'shelter',
 } as const;
 
 // Indexed by tower level - 1.
-export const TOWER_GUN_TEXTURES: readonly string[] = [1, 2, 3, 4, 5].map((level) => `tower-gun-${level}`);
+export const TOWER_GUN_TEXTURES: readonly string[] = TOWER_LEVELS.map(({ level }) => `tower-gun-${level}`);
 
 export const ENEMY_TEXTURES: Readonly<Record<EnemyKind, string>> = {
   T1: 'enemy-t1',
@@ -17,14 +19,24 @@ export const ENEMY_TEXTURES: Readonly<Record<EnemyKind, string>> = {
   T3: 'enemy-t3',
   T4: 'enemy-t4',
   T5: 'enemy-t5',
+  T6: 'enemy-t6',
+  T7: 'enemy-t7',
+  T8: 'enemy-t8',
+  runner: 'enemy-runner',
+  armored: 'enemy-armored',
+  splitter: 'enemy-splitter',
   boss: 'enemy-boss',
 };
 
 export const DEPTH = {
   ground: 0,
   hover: 1,
+  route: 1,
   shelter: 2,
   tower: 3,
   enemy: 4,
   projectile: 5,
+  overlay: 6,
+  // Above the pause overlay: planning while paused needs a crisp cursor.
+  cursor: 7,
 } as const;

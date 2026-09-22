@@ -37,3 +37,24 @@ describe('GameClock', () => {
     expect(clock.speed).toBe(1);
   });
 });
+
+describe('GameClock pause', () => {
+  it('simulates nothing while paused and does not burst on resume', () => {
+    const clock = new GameClock();
+    clock.togglePause();
+    expect(clock.paused).toBe(true);
+    for (let i = 0; i < 10; i++) expect(clock.advance(SIM_STEP_MS * 5)).toBe(0);
+    clock.togglePause();
+    expect(clock.advance(SIM_STEP_MS)).toBe(1);
+  });
+
+  it('keeps the pause across speed changes and resumes at the chosen speed', () => {
+    const clock = new GameClock();
+    clock.setPaused(true);
+    clock.setSpeedLevel(1);
+    expect(clock.paused).toBe(true);
+    expect(clock.advance(SIM_STEP_MS)).toBe(0);
+    clock.setPaused(false);
+    expect(clock.advance(SIM_STEP_MS)).toBe(GAME_SPEEDS[1]);
+  });
+});

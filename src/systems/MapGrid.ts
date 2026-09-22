@@ -5,47 +5,75 @@ export interface Point {
   y: number;
 }
 
+export type TileType = 'path' | 'gravel' | 'ground';
+
+// A map's waypoints only define its initial layout: path along them, ground everywhere
+// else. The player can edit tile types afterwards; the entry and shelter tiles are fixed.
 export class MapGrid {
-  private readonly pathTiles = new Set<string>();
+  readonly entry: TileCoord;
+  readonly leadIn: TileCoord;
+  private readonly types: TileType[];
   private readonly occupiedTiles = new Set<string>();
 
   constructor(
     readonly cols: number,
     readonly rows: number,
     readonly tileSize: number,
-    private readonly waypoints: readonly TileCoord[],
+    waypoints: readonly TileCoord[],
     private readonly blockedTopRows: number,
+    private readonly blockedBottomRows: number,
   ) {
-    this.buildPathTiles();
+    this.types = new Array<TileType>(cols * rows).fill('ground');
+    this.leadIn = waypoints[0];
+    this.entry = this.buildPath(waypoints);
+  }
+
+  get firstPlayableRow(): number {
+    return this.blockedTopRows;
+  }
+
+  get lastPlayableRow(): number {
+    return this.rows - this.blockedBottomRows - 1;
   }
 
   isInBounds(tile: TileCoord): boolean {
     return tile.col >= 0 && tile.col < this.cols && tile.row >= 0 && tile.row < this.rows;
   }
 
+  isPlayable(tile: TileCoord): boolean {
+    return this.isInBounds(tile) && tile.row >= this.firstPlayableRow && tile.row <= this.lastPlayableRow;
+  }
+
+  tileType(tile: TileCoord): TileType {
+    return this.isInBounds(tile) ? this.types[this.index(tile)] : 'ground';
+  }
+
+  setTileType(tile: TileCoord, type: TileType): void {
+    if (this.isInBounds(tile)) this.types[this.index(tile)] = type;
+  }
+
   isPath(tile: TileCoord): boolean {
-    return this.pathTiles.has(key(tile));
+    return this.tileType(tile) === 'path';
+  }
+
+  isWalkable(tile: TileCoord): boolean {
+    return this.isInBounds(tile) && this.tileType(tile) !== 'ground';
   }
 
   isOccupied(tile: TileCoord): boolean {
-    return this.occupiedTiles.has(key(tile));
+    return this.occupiedTiles.has(tileKey(tile));
   }
 
   isBuildable(tile: TileCoord): boolean {
-    return (
-      this.isInBounds(tile) &&
-      tile.row >= this.blockedTopRows &&
-      !this.isPath(tile) &&
-      !this.isOccupied(tile)
-    );
+    return this.isPlayable(tile) && this.tileType(tile) === 'ground' && !this.isOccupied(tile);
   }
 
   occupy(tile: TileCoord): void {
-    this.occupiedTiles.add(key(tile));
+    this.occupiedTiles.add(tileKey(tile));
   }
 
   release(tile: TileCoord): void {
-    this.occupiedTiles.delete(key(tile));
+    this.occupiedTiles.delete(tileKey(tile));
   }
 
   tileToWorld(tile: TileCoord): Point {
@@ -62,14 +90,16 @@ export class MapGrid {
     };
   }
 
-  worldWaypoints(): Point[] {
-    return this.waypoints.map((tile) => this.tileToWorld(tile));
+  private index(tile: TileCoord): number {
+    return tile.row * this.cols + tile.col;
   }
 
-  private buildPathTiles(): void {
-    for (let i = 0; i < this.waypoints.length - 1; i++) {
-      const from = this.waypoints[i];
-      const to = this.waypoints[i + 1];
+  // Lays path tiles along the waypoints and returns the first in-bounds one (the entry).
+  private buildPath(waypoints: readonly TileCoord[]): TileCoord {
+    let entry: TileCoord | undefined;
+    for (let i = 0; i < waypoints.length - 1; i++) {
+      const from = waypoints[i];
+      const to = waypoints[i + 1];
       if (from.col !== to.col && from.row !== to.row) {
         throw new Error(`Path segment ${i} is not orthogonal`);
       }
@@ -79,15 +109,24 @@ export class MapGrid {
       let row = from.row;
       for (;;) {
         const tile = { col, row };
-        if (this.isInBounds(tile)) this.pathTiles.add(key(tile));
+        if (this.isInBounds(tile)) {
+          this.setTileType(tile, 'path');
+          entry ??= tile;
+        }
         if (col === to.col && row === to.row) break;
         col += stepCol;
         row += stepRow;
       }
     }
+    if (!entry) throw new Error('Path never enters the map');
+    return entry;
   }
 }
 
-function key(tile: TileCoord): string {
+export function tileKey(tile: TileCoord): string {
   return `${tile.col},${tile.row}`;
+}
+
+export function sameTile(a: TileCoord, b: TileCoord): boolean {
+  return a.col === b.col && a.row === b.row;
 }

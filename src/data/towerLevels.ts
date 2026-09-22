@@ -14,6 +14,9 @@ export const TOWER_LEVELS: readonly TowerLevel[] = [
   { level: 3, cost: 100, damage: 26, range: 140, cooldownMs: 500, unlockWave: 5 },
   { level: 4, cost: 160, damage: 42, range: 155, cooldownMs: 450, unlockWave: 10 },
   { level: 5, cost: 250, damage: 70, range: 170, cooldownMs: 400, unlockWave: 15 },
+  { level: 6, cost: 380, damage: 110, range: 180, cooldownMs: 370, unlockWave: 20 },
+  { level: 7, cost: 560, damage: 170, range: 190, cooldownMs: 340, unlockWave: 25 },
+  { level: 8, cost: 800, damage: 260, range: 200, cooldownMs: 300, unlockWave: 30 },
 ];
 
 export const TOWER_PLACE_COST = TOWER_LEVELS[0].cost;

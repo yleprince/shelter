@@ -1,3 +1,5 @@
+import type { TileType } from './systems/MapGrid';
+
 export const GAME_WIDTH = 960;
 export const GAME_HEIGHT = 640;
 
@@ -6,6 +8,8 @@ export const GRID_COLS = GAME_WIDTH / TILE_SIZE;
 export const GRID_ROWS = GAME_HEIGHT / TILE_SIZE;
 // The HUD needs two lines (stats, then controls), so the top two rows sit under it.
 export const HUD_ROWS = 2;
+// The bottom row is the vim-style status line: pending keys, messages, tile under the cursor.
+export const STATUS_ROWS = 1;
 
 export const STARTING_CURRENCY = 100;
 
@@ -17,11 +21,27 @@ export const SHELTER_REPAIR_COST_PER_WAVE = 2;
 // Tower stats per level live in data/towerLevels.ts.
 export const TOWER_SELL_REFUND_RATIO = 0.6;
 
+// Scrap spent on edits is gone for good (no refunds), like repair.
+export const TILE_EDIT_BASE_COST: Readonly<Record<TileType, number>> = { path: 15, gravel: 30, ground: 20 };
+export const TILE_EDIT_COST_PER_WAVE = 1;
+export const GRAVEL_SPEED_MULTIPLIER = 0.5;
+
 export const PROJECTILE_SPEED = 400;
 export const PROJECTILE_HIT_RADIUS = 8;
 
 // Enemy base stats per tier live in data/enemyTiers.ts.
 export const ENEMY_KILL_REWARD_PER_WAVE = 1;
+
+// Special enemies live in data/specialEnemies.ts. Each one takes this share of a wave
+// (rounded up) out of the normal count, so wave size doesn't change.
+export const SPECIAL_SHARE = 0.1;
+export const ARMORED_ARMOR = 8;
+export const ARMOR_MIN_DAMAGE = 1;
+export const SPLITTER_CHILD_COUNT = 2;
+export const SPLITTER_CHILD_REWARD_RATIO = 0.5;
+export const SPLITTER_CHILD_SCALE = 0.7;
+// Children get this head start on each other so they don't render as one stacked sprite.
+export const SPLITTER_CHILD_SPACING_PX = 10;
 
 export const WAVE_BASE_ENEMY_COUNT = 4;
 export const WAVE_COUNT_INCREMENT = 2;
@@ -44,6 +64,13 @@ export const GAME_SPEEDS: readonly number[] = [1, 2, 10, 50];
 export const SIM_STEP_MS = 1000 / 60;
 // A stalled tab can hand us seconds of delta; at x50 that would be minutes of simulation.
 export const MAX_FRAME_DELTA_MS = 100;
+
+// Like vim's timeoutlen: how long a pending multi-key sequence (gg, dd, r…) waits.
+export const KEY_SEQUENCE_TIMEOUT_MS = 1000;
+// Space means pause in game, so a player mashing it as the shelter falls would otherwise
+// retry before seeing their score.
+export const GAME_OVER_INPUT_DELAY_MS = 600;
+export const STATUS_MESSAGE_MS = 2500;
 
 export const SURVIVAL_POINTS_PER_SEC = 1;
 export const POINTS_PER_KILL = 10;

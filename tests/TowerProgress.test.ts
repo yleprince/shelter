@@ -12,23 +12,29 @@ describe('TowerProgress', () => {
     expect(tower.totalInvested).toBe(TOWER_LEVELS[0].cost);
   });
 
+  it('goes up to Lv8', () => {
+    expect(TOWER_LEVELS).toHaveLength(8);
+    expect(TOWER_LEVELS.map((l) => l.level)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+  });
+
   it('upgrades through every level, charging each cost and switching stats', () => {
     const tower = new TowerProgress();
-    const economy = new Economy(10_000);
+    const economy = new Economy(100_000);
     for (const next of TOWER_LEVELS.slice(1)) {
       expect(tower.upgrade(next.unlockWave, economy)).toBe(true);
       expect(tower.stats).toBe(next);
     }
     const upgradeCosts = TOWER_LEVELS.slice(1).reduce((sum, l) => sum + l.cost, 0);
-    expect(economy.balance).toBe(10_000 - upgradeCosts);
+    expect(economy.balance).toBe(100_000 - upgradeCosts);
     expect(tower.totalInvested).toBe(TOWER_LEVELS.reduce((sum, l) => sum + l.cost, 0));
+    expect(tower.level).toBe(TOWER_LEVELS.length);
     expect(tower.upgradeBlocker(100, 10_000)).toBe('max-level');
     expect(tower.upgrade(100, economy)).toBe(false);
   });
 
   it('is gated by wave, then by cost, without charging when blocked', () => {
     const tower = new TowerProgress();
-    const economy = new Economy(10_000);
+    const economy = new Economy(100_000);
     tower.upgrade(1, economy);
     const lv3 = TOWER_LEVELS[2];
     const before = economy.balance;

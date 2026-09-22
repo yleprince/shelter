@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
-import { GAME_WIDTH } from '../config';
+import { GAME_OVER_INPUT_DELAY_MS, GAME_WIDTH, KEY_SEQUENCE_TIMEOUT_MS } from '../config';
+import { GAME_OVER_BINDINGS, keyHint } from '../data/keybindings';
 import type { MapDefinition } from '../data/maps';
+import { KeySequence, keyToken } from '../systems/KeySequence';
 import type { ScoreBreakdown } from '../systems/ScoreManager';
 import type { GameSceneData } from './MapSelectScene';
 
@@ -48,15 +50,26 @@ export class GameOverScene extends Phaser.Scene {
     const retry = () => this.scene.start('GameScene', { mapId: map.id } satisfies GameSceneData);
     const changeMap = () => this.scene.start('MapSelectScene');
     this.add
-      .text(cx - 20, 520, 'Retry (SPACE)', BUTTON_STYLE)
+      .text(cx - 20, 520, `Retry [${keyHint(GAME_OVER_BINDINGS, 'retry')}]`, BUTTON_STYLE)
       .setOrigin(1, 0.5)
       .setInteractive({ useHandCursor: true })
       .once(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, retry);
     this.add
-      .text(cx + 20, 520, 'Change map', BUTTON_STYLE)
+      .text(cx + 20, 520, `Change map [${keyHint(GAME_OVER_BINDINGS, 'changeMap')}]`, BUTTON_STYLE)
       .setOrigin(0, 0.5)
       .setInteractive({ useHandCursor: true })
       .once(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, changeMap);
-    this.input.keyboard?.once('keydown-SPACE', retry);
+
+    const keys = new KeySequence(GAME_OVER_BINDINGS, KEY_SEQUENCE_TIMEOUT_MS);
+    // Space also pauses in game: a press meant for the game must not skip the score.
+    let ready = false;
+    this.time.delayedCall(GAME_OVER_INPUT_DELAY_MS, () => (ready = true));
+    this.input.keyboard?.on('keydown', (e: KeyboardEvent) => {
+      if (!ready || e.repeat) return;
+      const result = keys.press(keyToken(e.key, e.code, (key) => keys.isBound(key)));
+      if (result.kind !== 'action') return;
+      if (result.action === 'retry') retry();
+      else if (result.action === 'changeMap') changeMap();
+    });
   }
 }

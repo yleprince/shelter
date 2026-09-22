@@ -1,7 +1,8 @@
 # Spec: Progression 2 (keyboard play, tile editing, more tiers, pause)
 
-Status: **agreed design** (2026-09-23), not implemented yet. The choices made while
-drafting are listed in [Decisions](#decisions).
+Status: **implemented** on branch `feat/progression` (2026-09-23). The choices made
+while drafting are listed in [Decisions](#decisions); where the code departs from this
+design, see [Implementation notes](#implementation-notes).
 
 Builds on `docs/specs/progression.md` and the current `CLAUDE.md`. This spec brings two
 items that `CLAUDE.md` marks out of scope into scope: **pause**, and a limited form of
@@ -389,3 +390,64 @@ Agreed on 2026-09-23 while drafting:
 Still open, to settle in playtest rather than on paper: all balance numbers,
 especially the T8-based boss HP (§4.2), the special share, and armor vs. Lv1–Lv2
 turrets.
+
+## Implementation notes
+
+### Where things live
+
+| Concern | Code | Tests |
+|---|---|---|
+| Pause | `GameClock` (`paused`, `togglePause`, `setPaused`) | `tests/GameClock.test.ts` |
+| Key table, help source | `src/data/keybindings.ts` | `tests/keybindings.test.ts` |
+| Key sequences, timeout, layout mapping | `src/systems/KeySequence.ts` | `tests/KeySequence.test.ts` |
+| Cursor motions | `src/systems/TileCursor.ts` | `tests/TileCursor.test.ts` |
+| Help overlay | `src/ui/HelpOverlay.ts` (shared by game and map select) | — |
+| Tile types, entry tile, status row | `src/systems/MapGrid.ts` | `tests/MapGrid.test.ts`, `tests/maps.test.ts` |
+| Routing | `src/systems/PathField.ts` | `tests/PathField.test.ts` |
+| Tile-stepping movement (replaces `PathFollower`) | `src/systems/TileFollower.ts` | `tests/TileFollower.test.ts` |
+| Edit rules and cost | `src/systems/TileEditor.ts` | `tests/TileEditor.test.ts` |
+| Armor, gravel multiplier | `src/systems/EnemyTraits.ts` | `tests/EnemyTraits.test.ts` |
+| Specials, share, interleaving, splitter children | `src/data/specialEnemies.ts`, `WaveComposer` | `tests/WaveComposer.test.ts`, `tests/EnemyTraits.test.ts` |
+| Blocker messages | `src/ui/labels.ts` | — |
+
+### Departures from the design
+
+- **Edge cost is the average of both tiles' step costs**, not the cost of the tile
+  stepped onto. An enemy spends half of each move on each tile, so this matches the
+  real travel time, and it keeps the cost symmetric.
+- **One extra edit refusal:** turning a tile into ground is also refused when it would
+  cut *any enemy* (not just the entry) off from the shelter. Without it, cutting a
+  branch behind an enemy would strand it forever and the wave would never clear. It
+  shares the `disconnects` reason.
+- **`splitsInto` holds the child specs** (`EnemySpec[]`), built by
+  `WaveComposer.splitterChildren` when the splitter's spec is built. Children also get
+  an optional `scale` (`SPLITTER_CHILD_SCALE`), and each one starts
+  `SPLITTER_CHILD_SPACING_PX` further along the route than the previous one, so two
+  children don't render as one sprite.
+- **Specials are round-robin between kinds** before being interleaved, so the first
+  specials of a wave are one of each rather than all the runners first.
+- **Key auto-repeat** only drives single-key bindings marked `repeatable` (movement and
+  `w`/`b`): holding `d` never sells.
+- **Keyboard layouts:** keys are matched on `KeyboardEvent.key` (so `$` and `?` work
+  wherever they sit), with a fallback to the physical digit row. On AZERTY, `1`–`4`
+  still set the speed without Shift.
+- **Route preview:** the board shows the current route while `r` is pending or the tile
+  panel is open. The panel previews the hovered option's resulting route in blue. The
+  keyboard path has no single option "under consideration" until the second key, so
+  it shows the current route.
+- **Tower base scale per level** dropped from 0.06 to 0.035 so a Lv8 base still fits
+  its tile.
+- **Messages:** refused key actions (can't build, not enough scrap, locked upgrade…)
+  show in the status line for `STATUS_MESSAGE_MS`.
+
+### Verification
+
+- `npm test` (107 tests), `npm run typecheck` and `npm run build` pass.
+- Checked in headless Chromium with scripted input: map select keys and help, in-game
+  help (pauses and restores), placing, `dd` selling and `u` upgrading from the
+  keyboard, pause overlay, `gs`, `r` pending status and route preview, `rg` charging
+  the right cost, the right-click tile panel with per-option reasons, rerouting
+  mid-wave through a new shortcut, refusal to cut a tile ahead of an enemy, specials
+  on screen at wave 12, upgrading to Lv8 at wave 30, and the game-over input guard.
+- Not yet done: a full **manual** keyboard-only playtest, and any balance pass (boss
+  HP at T8, special share, armor vs. Lv1–Lv2).
