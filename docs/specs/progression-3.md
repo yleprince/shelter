@@ -1,4 +1,4 @@
-# Spec: Progression 3 (speeds, best score, shelter upgrades, water, fire, ice)
+# Spec: Progression 3 (speeds, best score, shelter upgrades, water, fire, ice, max upgrade)
 
 Status: **draft** (2026-09-23). Not implemented yet. The choices made while drafting are
 listed in [Decisions](#decisions).
@@ -16,6 +16,8 @@ Goals:
 5. **Shelter upgrades:** the player pays scrap to raise the shelter's max HP.
 6. **Fire tiles:** unlocked at wave 250, they damage enemies walking on them.
 7. **Ice tiles:** they speed enemies up, but a kill on ice is worth much more score.
+8. **Max upgrade on `U`:** upgrade a tower to the highest level the current wave and
+   scrap allow, in one keystroke.
 
 As before, every number below is a **starting value** for playtesting. Numbers live in
 `src/config.ts` (scalars) and `src/data/*.ts` (tables), never inline.
@@ -256,10 +258,10 @@ A flat `SHELTER_REPAIR_AMOUNT = 10` barely matters on a 450 HP shelter.
 
 ### 5.3 Controls and feedback
 
-- Keyboard: **`U`** upgrades the shelter from anywhere (like `R` repairs it).
-  Also, `u` with the cursor on the shelter tile upgrades the shelter instead of
-  refusing with "no tower here". It's the same action, so both `u` and `U` work there.
-- HUD: a new `Shelter Lv2 → Lv3 (300) [U]` button next to Repair. It's disabled with
+- Keyboard: **`S`** upgrades the shelter by one level from anywhere (like `R`
+  repairs it). With the cursor on the shelter tile, `u` upgrades it by one level and
+  `U` to the highest level available, the same as on a tower (§9).
+- HUD: a new `Shelter Lv2 → Lv3 (300) [S]` button next to Repair. It's disabled with
   the reason when blocked (`Shelter max level`, `Lv3 at wave 10`), like the repair
   button. The HUD stat reads `Shelter 115/225 Lv3`.
 - The status line under the cursor on the shelter tile: `Shelter Lv3 · 115/225`.
@@ -268,7 +270,7 @@ A flat `SHELTER_REPAIR_AMOUNT = 10` barely matters on a 450 HP shelter.
   repair flashes are unchanged.
 - The HUD's second line is getting full (speeds, pause, repair, upgrade, next wave,
   help). If it no longer fits at `GAME_WIDTH = 960`, shorten the labels first
-  (`Upg Lv3 (300) [U]`). A click-on-shelter panel is the fallback, not part of this
+  (`Upg Lv3 (300) [S]`). A click-on-shelter panel is the fallback, not part of this
   spec.
 
 ### 5.4 Structure
@@ -280,7 +282,7 @@ A flat `SHELTER_REPAIR_AMOUNT = 10` barely matters on a 450 HP shelter.
   level, unlock wave gating, cost, repair amount per level.
 - `entities/Shelter.ts` swaps its texture on upgrade.
 - `labels.ts`: shelter upgrade blocker texts. `keybindings.ts`: `upgradeShelter` on
-  `U`.
+  `S`.
 
 ## 6. Tile types become a data table
 
@@ -403,6 +405,65 @@ multiplier, a higher edit cost, or an unlock wave.
 - Texture `TEXTURES.ice`: pale cyan with white streaks. It must be clearly different
   from water (deep blue ripples).
 
+## 9. Max upgrade on `U`
+
+### 9.1 Rule
+
+- With the cursor on a tower, **`U`** upgrades it as many levels as possible in one
+  go. `u` keeps upgrading one level.
+- The target level is found by walking up `TOWER_LEVELS` from the current level and
+  taking each next level while **both** hold:
+  - its `unlockWave ≤` the current wave, and
+  - the **running total** of the levels taken so far, plus this one, `≤` the scrap
+    balance.
+- It stops at the first level that fails either check. Levels are never skipped: if
+  Lv5 is too expensive, Lv6 isn't considered even when it would be unlocked.
+- The total is charged **once**, and the tower jumps straight to the target level.
+  The invested scrap (and so the sell value) is the same as upgrading one level at a
+  time.
+- If not even one level can be taken, nothing happens and the status line shows the
+  same reason as `u` would for the next level (`Max level`, `Lv5 unlocks at wave 15`,
+  `Not enough scrap`).
+- Example: a Lv2 tower at wave 12 with 400 scrap. Lv3 costs 100 and Lv4 costs 160
+  (total 260), both unlocked. Lv5 is locked until wave 15, so `U` stops at Lv4 for
+  260 and leaves 140.
+- Status line on success: `Tower Lv2 → Lv4 (−260)`.
+
+### 9.2 Where it works
+
+- On a **tower**: as above.
+- On the **shelter tile**: the same rule over `SHELTER_LEVELS` (§5). That's why the
+  "upgrade shelter from anywhere" key moved from `U` to `S` in §5.3. `u` / `U` now
+  mean "one level" / "max level" for whatever is under the cursor.
+- Anywhere else: `No tower here`, like `u`.
+- Not repeatable on key hold, like `u`.
+
+### 9.3 Mouse
+
+- The tower panel gets a second button under Upgrade: `Max → Lv4 (260) [U]`. When
+  the max is only one level, it shows the same target as Upgrade. That's fine and
+  keeps the panel layout stable. When nothing can be taken, it's disabled with the
+  reason, like Upgrade.
+- The HUD shelter button (§5.3) stays one level at a time. Max upgrading the shelter
+  with the mouse isn't needed often enough to add a second HUD button.
+
+### 9.4 Structure
+
+- New pure helper `src/systems/UpgradePlan.ts`:
+  `planUpgrade(levels, currentLevel, wave, balance)` returns
+  `{ targetLevel, cost }` for at least one level, or the blocker for the next level.
+  It takes any table of `{ cost, unlockWave }`, so towers and the shelter share it.
+- `TowerProgress.maxUpgrade(wave, economy)` and `ShelterHealth.maxUpgrade(wave,
+  economy)` use it, spend the total once, and apply each level's effect (for the
+  shelter, the HP added per level from §5.1 adds up).
+- `keybindings.ts`: `upgradeMax` on `U`, group **Build**, description
+  `Upgrade to the highest level available`.
+- Unit tests for `planUpgrade`: stops at the first locked level, stops at the first
+  unaffordable level (running total), doesn't skip levels, max level, exact balance,
+  zero levels returns the next level's blocker. Plus `TowerProgress` (one charge,
+  invested total unchanged vs. step by step, sell value) and `ShelterHealth` (HP
+  added over several levels).
+
 ## Implementation order
 
 Each step ships on its own and keeps the game playable:
@@ -414,8 +475,9 @@ Each step ships on its own and keeps the game playable:
    `EnemyTraits`, the `locked` blocker, `rw`, the tile panel option, texture.
 3. **Speed drop on hit**: `GameClock.dropToBaseSpeed()` and the step loop break.
    Small, and best done right after the new speeds.
-4. **Shelter upgrades**: table, `ShelterHealth` levels, repair ratio, `U`, HUD button,
-   textures.
+4. **Shelter upgrades and max upgrade**: table, `ShelterHealth` levels, repair
+   ratio, `S`, HUD button, textures, then `UpgradePlan`, `U` on towers and the
+   shelter, the tower panel Max button.
 5. **Ice**: table row, `ScoreManager` ice kills, the breakdown line, popup, texture.
    Before best score, so the best score is recorded with the final formula.
 6. **Fire**: table row, `terrainDamage`, `Enemy.burn`, tint, texture.
@@ -429,11 +491,12 @@ Each step ships on its own and keeps the game playable:
   `EnemyTraits` (water for normal enemies and runners), `TileEditor` (water `locked`
   before wave 150, allowed from 150, cost; fire locked before 250), `keybindings`
   (`rw`, `rf`, `ri`, speed descriptions match `GAME_SPEEDS`), `ScoreManager` (ice
-  kills, the new formula), `PathField` (ice attracts: an ice detour beats a shorter
+  kills, the new formula), `TowerProgress` and `ShelterHealth` (max upgrade),
+  `PathField` (ice attracts: an ice detour beats a shorter
   path route).
 - Unit (new): `tileTypes` table sanity (every `TileType` has a row, unique edit keys,
   ground is the only non-walkable type, speed multipliers > 0),
-  `EnemyTraits.terrainDamage` (wave scaling, 0 off fire).
+  `EnemyTraits.terrainDamage` (wave scaling, 0 off fire), `UpgradePlan` (§9.4).
 - Unit (new): `shelterLevels` table sanity (max HP and costs strictly increasing, Lv1
   free). `BestScore`: parsing valid, malformed, negative, non-integer and
   unknown-map values; formatting; "new best" is strictly higher; first score is a new
@@ -444,7 +507,9 @@ Each step ships on its own and keeps the game playable:
   wave 150 (reach it at x500), a runner crossing it, the route rerouting around it.
   Speed drop: a leak at x500 drops to x1 on the hit, with no extra hits from the
   rest of that frame, and the pause state is kept. Shelter: upgrade from `U`, from `u`
-  on the shelter tile and from the HUD, texture per level, HUD fits. Fire at wave 250:
+  on the shelter tile and from the HUD, texture per level, HUD fits. Max upgrade:
+  `U` on a tower stops at the locked level and at the scrap limit, the panel's Max
+  button, `U` on the shelter, `S` from anywhere. Fire at wave 250:
   enemies and armored enemies burn, fire kills pay scrap, a splitter's children
   burn. Ice: enemies speed up and reroute onto it, the `×5` popup, the ice kills line
   on game over. The tile panel with six options fits.
@@ -459,6 +524,8 @@ Each step ships on its own and keeps the game playable:
   fire, ice), unlock waves and the `locked` refusal. Fire damage, and routing that
   looks at speed only. Runner: gravel only.
 - Scoring: the formula with ice kills.
+- Entities / Tower: `U` and the panel's Max button upgrade to the highest level the
+  wave and scrap allow.
 - Out of scope: replace "Persistent anything" with "Persistence beyond the best-score
   cookie (e.g. a leaderboard, saved games)".
 - Project structure: `BestScore.ts`, the cookie adapter, `shelterLevels.ts` and
@@ -485,3 +552,6 @@ Defaults picked while drafting (2026-09-23), open to change before implementatio
 | 13 | Ice unlock | **From the start** (not given in the request) | An unlock wave, like water and fire |
 | 14 | Ice score bonus | **×5 kill points, scrap unchanged** | ×3. Also a scrap bonus |
 | 15 | Tile data | **One `tileTypes.ts` table** for all six types | Keep per-type constants in `config.ts` |
+| 16 | `U` vs. the shelter upgrade key | **`U` = max upgrade of what's under the cursor; shelter from anywhere moves to `S`** | Keep `U` for the shelter and use another key for max |
+| 17 | Max upgrade when a level is too expensive | **Stop there, never skip levels** | Do nothing unless the top unlocked level is affordable |
+| 18 | Mouse max upgrade | **A Max button in the tower panel** only | Also a HUD button for the shelter. Shift-click Upgrade |
