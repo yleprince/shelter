@@ -1,5 +1,5 @@
-import { GRAVEL_SPEED_MULTIPLIER } from '../config';
 import type { TileCoord } from '../data/maps';
+import { TILE_TYPES } from '../data/tileTypes';
 import type { TileType } from './MapGrid';
 
 export type TileTypeLookup = (tile: TileCoord) => TileType;
@@ -13,7 +13,8 @@ const NEIGHBOURS: readonly TileCoord[] = [
 ];
 
 export function stepCost(type: TileType): number {
-  return type === 'gravel' ? 1 / GRAVEL_SPEED_MULTIPLIER : type === 'path' ? 1 : Infinity;
+  const def = TILE_TYPES[type];
+  return def.walkable ? 1 / def.speedMultiplier : Infinity;
 }
 
 // Dijkstra from the goal over walkable tiles, so every tile knows its fastest way to the
@@ -97,7 +98,7 @@ export class PathField {
   }
 
   private isWalkable(tile: TileCoord): boolean {
-    return this.inBounds(tile) && this.typeAt(tile) !== 'ground';
+    return this.inBounds(tile) && TILE_TYPES[this.typeAt(tile)].walkable;
   }
 
   private inBounds(tile: TileCoord): boolean {

@@ -1,20 +1,22 @@
-import { GRAVEL_SPEED_MULTIPLIER } from '../config';
+import { TILE_TYPES } from '../data/tileTypes';
 import type { TowerLevel } from '../data/towerLevels';
 import type { TileType } from '../systems/MapGrid';
 import type { RepairBlocker } from '../systems/ShelterHealth';
 import type { EditBlocker } from '../systems/TileEditor';
 import type { UpgradeBlocker } from '../systems/TowerProgress';
 
-export const TILE_TYPE_DESCRIPTIONS: Readonly<Record<TileType, string>> = {
-  path: 'Path',
-  gravel: `Gravel · enemies ×${GRAVEL_SPEED_MULTIPLIER}`,
-  ground: 'Ground (buildable)',
-};
+export function tileTypeDescription(type: TileType): string {
+  const { name, walkable, speedMultiplier } = TILE_TYPES[type];
+  if (!walkable) return `${name} (buildable)`;
+  return speedMultiplier === 1 ? name : `${name} · enemies ×${speedMultiplier}`;
+}
 
 export function editBlockerText(blocker: EditBlocker, type: TileType): string {
   switch (blocker) {
     case 'not-playable':
       return "Can't edit here";
+    case 'locked':
+      return `${TILE_TYPES[type].name} unlocks at wave ${TILE_TYPES[type].unlockWave}`;
     case 'shelter':
       return 'The shelter tile is fixed';
     case 'entry':

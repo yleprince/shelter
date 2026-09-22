@@ -66,6 +66,7 @@ export class BootScene extends Phaser.Scene {
     this.makeGroundTile();
     this.makePathTile();
     this.makeGravelTile();
+    this.makeWaterTile();
     this.makeTower();
     this.makeEnemies();
     this.makeProjectile();
@@ -110,6 +111,23 @@ export class BootScene extends Phaser.Scene {
       for (let i = 0; i < 28; i++) {
         g.fillStyle(rng.pick([0x8f8a7e, 0x55524a, 0xa39e90]));
         g.fillCircle(rng.between(2, TILE_SIZE - 2), rng.between(2, TILE_SIZE - 2), rng.between(1, 3));
+      }
+    });
+  }
+
+  // Deep blue with pale ripples, so it can't be mistaken for grey gravel at a glance.
+  private makeWaterTile(): void {
+    const rng = new Phaser.Math.RandomDataGenerator(['water']);
+    this.draw(TEXTURES.water, TILE_SIZE, TILE_SIZE, (g) => {
+      g.fillStyle(0x1f4e79).fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+      g.lineStyle(2, 0x8fc3e8, 0.8);
+      for (let i = 0; i < 4; i++) {
+        const x = rng.between(2, TILE_SIZE - 16);
+        const y = 6 + i * 9 + rng.between(-1, 1);
+        g.beginPath();
+        g.arc(x + 4, y + 2, 4, Math.PI * 1.1, Math.PI * 1.9);
+        g.arc(x + 11, y - 2, 4, Math.PI * 0.1, Math.PI * 0.9, true);
+        g.strokePath();
       }
     });
   }

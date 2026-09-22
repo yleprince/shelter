@@ -1,10 +1,12 @@
-import { TILE_EDIT_BASE_COST, TILE_EDIT_COST_PER_WAVE } from '../config';
+import { TILE_EDIT_COST_PER_WAVE } from '../config';
 import type { TileCoord } from '../data/maps';
+import { TILE_TYPES } from '../data/tileTypes';
 import { sameTile, type MapGrid, type TileType } from './MapGrid';
 import { PathField } from './PathField';
 
 export type EditBlocker =
   | 'not-playable'
+  | 'locked'
   | 'shelter'
   | 'entry'
   | 'tower'
@@ -23,7 +25,11 @@ export interface EditContext {
 }
 
 export function editCost(type: TileType, wave: number): number {
-  return TILE_EDIT_BASE_COST[type] + wave * TILE_EDIT_COST_PER_WAVE;
+  return TILE_TYPES[type].editBaseCost + wave * TILE_EDIT_COST_PER_WAVE;
+}
+
+export function isTileTypeUnlocked(type: TileType, wave: number): boolean {
+  return wave >= TILE_TYPES[type].unlockWave;
 }
 
 // The grid's tile types with one tile swapped, without touching the grid.
@@ -34,12 +40,13 @@ export function withEdit(grid: MapGrid, tile: TileCoord, type: TileType): (t: Ti
 export function editBlocker(tile: TileCoord, type: TileType, ctx: EditContext): EditBlocker | null {
   const { grid } = ctx;
   if (!grid.isPlayable(tile)) return 'not-playable';
+  if (!isTileTypeUnlocked(type, ctx.wave)) return 'locked';
   if (sameTile(tile, ctx.shelter)) return 'shelter';
-  if (type === 'ground' && sameTile(tile, grid.entry)) return 'entry';
+  if (!TILE_TYPES[type].walkable && sameTile(tile, grid.entry)) return 'entry';
   if (grid.isOccupied(tile)) return 'tower';
   if (grid.tileType(tile) === type) return 'same-type';
-  // Only turning a tile into ground can block anyone; path and gravel only change costs.
-  if (type === 'ground') {
+  // Only turning a tile into ground can block anyone; walkable types only change costs.
+  if (!TILE_TYPES[type].walkable) {
     if (ctx.enemyTiles.some((t) => sameTile(t, tile))) return 'enemy';
     const field = new PathField(grid.cols, grid.rows, withEdit(grid, tile, type), ctx.shelter);
     const mustReach = [grid.entry, ...ctx.enemyTiles.filter((t) => grid.isInBounds(t))];

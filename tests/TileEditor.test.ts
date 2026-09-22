@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { TILE_EDIT_BASE_COST, TILE_EDIT_COST_PER_WAVE } from '../src/config';
+import { TILE_EDIT_COST_PER_WAVE } from '../src/config';
+import { TILE_TYPES } from '../src/data/tileTypes';
 import { MapGrid } from '../src/systems/MapGrid';
 import { editBlocker, editCost, type EditContext } from '../src/systems/TileEditor';
 
@@ -14,8 +15,9 @@ function setup(overrides: Partial<EditContext> = {}): EditContext {
 
 describe('editCost', () => {
   it('adds the per-wave increase to each type base cost', () => {
-    expect(editCost('gravel', 0)).toBe(TILE_EDIT_BASE_COST.gravel);
-    expect(editCost('path', 7)).toBe(TILE_EDIT_BASE_COST.path + 7 * TILE_EDIT_COST_PER_WAVE);
+    expect(editCost('gravel', 0)).toBe(TILE_TYPES.gravel.editBaseCost);
+    expect(editCost('path', 7)).toBe(TILE_TYPES.path.editBaseCost + 7 * TILE_EDIT_COST_PER_WAVE);
+    expect(editCost('water', 150)).toBe(TILE_TYPES.water.editBaseCost + 150 * TILE_EDIT_COST_PER_WAVE);
   });
 });
 
@@ -65,6 +67,23 @@ describe('editBlocker', () => {
     expect(editBlocker({ col: 4, row: 3 }, 'ground', ctx)).toBeNull();
     const stranded = { ...ctx, enemyTiles: [{ col: 5, row: 3 }] };
     expect(editBlocker({ col: 4, row: 3 }, 'ground', stranded)).toBe('disconnects');
+  });
+
+  it('locks water until its unlock wave, whatever the tile', () => {
+    const unlock = TILE_TYPES.water.unlockWave;
+    const locked = setup({ wave: unlock - 1 });
+    expect(editBlocker({ col: 2, row: 2 }, 'water', locked)).toBe('locked');
+    expect(editBlocker(locked.shelter, 'water', locked)).toBe('locked');
+    expect(editBlocker({ col: 5, row: 0 }, 'water', locked)).toBe('not-playable');
+
+    const open = setup({ wave: unlock, balance: editCost('water', unlock) });
+    expect(editBlocker({ col: 2, row: 2 }, 'water', open)).toBeNull();
+    expect(editBlocker(open.grid.entry, 'water', open)).toBeNull();
+  });
+
+  it('never refuses water for enemies or connectivity: it stays walkable', () => {
+    const ctx = setup({ wave: TILE_TYPES.water.unlockWave, enemyTiles: [{ col: 3, row: 3 }] });
+    expect(editBlocker({ col: 3, row: 3 }, 'water', ctx)).toBeNull();
   });
 
   it('checks the price last', () => {

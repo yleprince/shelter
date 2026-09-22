@@ -1,3 +1,6 @@
+import { GAME_SPEEDS } from '../config';
+import { TILE_TYPE_ORDER, TILE_TYPES, type TileType } from './tileTypes';
+
 // Single source of truth for keyboard controls: scenes resolve keys through this table
 // and the help overlays are generated from it, so the two can't drift apart.
 // Keys are KeyboardEvent.key values ('h', 'H', '$', '?', 'Enter'), with ' ' written as
@@ -26,9 +29,7 @@ export type GameAction =
   | 'place'
   | 'upgrade'
   | 'sell'
-  | 'tilePath'
-  | 'tileGravel'
-  | 'tileGround'
+  | TileEditAction
   | 'pause'
   | 'speed1'
   | 'speed2'
@@ -38,6 +39,12 @@ export type GameAction =
   | 'nextWave'
   | 'help'
   | 'cancel';
+
+export type TileEditAction = `tile${Capitalize<TileType>}`;
+
+export function tileEditAction(type: TileType): TileEditAction {
+  return `tile${type[0].toUpperCase()}${type.slice(1)}` as TileEditAction;
+}
 
 export type MapSelectAction = 'prevMap' | 'nextMap' | 'startMap' | 'map1' | 'map2' | 'map3' | 'help' | 'cancel';
 
@@ -90,14 +97,14 @@ export const GAME_BINDINGS: readonly KeyBinding<GameAction>[] = [
   game('Build', 'place', seq('i'), 'Place turret'),
   game('Build', 'upgrade', seq('u'), 'Upgrade tower'),
   game('Build', 'sell', seq('dd'), 'Sell tower'),
-  game('Tiles', 'tilePath', seq('rp'), 'Make path'),
-  game('Tiles', 'tileGravel', seq('rg'), 'Make gravel (slows enemies)'),
-  game('Tiles', 'tileGround', seq('rb'), 'Make buildable ground'),
+  ...TILE_TYPE_ORDER.map((type) =>
+    game('Tiles', tileEditAction(type), seq(`r${TILE_TYPES[type].editKey}`), TILE_TYPES[type].editHelp),
+  ),
   game('Game', 'pause', seq('Space'), 'Pause / resume'),
-  game('Game', 'speed1', seq('1'), 'Speed x1'),
-  game('Game', 'speed2', seq('2'), 'Speed x2'),
-  game('Game', 'speed3', seq('3'), 'Speed x10'),
-  game('Game', 'speed4', seq('4'), 'Speed x50'),
+  game('Game', 'speed1', seq('1'), `Speed x${GAME_SPEEDS[0]}`),
+  game('Game', 'speed2', seq('2'), `Speed x${GAME_SPEEDS[1]}`),
+  game('Game', 'speed3', seq('3'), `Speed x${GAME_SPEEDS[2]}`),
+  game('Game', 'speed4', seq('4'), `Speed x${GAME_SPEEDS[3]}`),
   game('Game', 'repair', seq('R'), 'Repair shelter'),
   game('Game', 'nextWave', seq('n'), 'Next wave now'),
   game('Game', 'help', seq('?'), 'Toggle this help'),

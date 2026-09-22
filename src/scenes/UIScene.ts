@@ -1,13 +1,14 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_SPEEDS, GAME_WIDTH, HUD_ROWS, SHELTER_REPAIR_AMOUNT, STATUS_ROWS, TILE_SIZE } from '../config';
-import { GAME_BINDINGS, keyHint, type GameAction } from '../data/keybindings';
+import { GAME_BINDINGS, keyHint, tileEditAction, type GameAction } from '../data/keybindings';
 import type { TileCoord } from '../data/maps';
+import { TILE_TYPE_ORDER, TILE_TYPES } from '../data/tileTypes';
 import { TOWER_PLACE_COST } from '../data/towerLevels';
 import type { Tower } from '../entities/Tower';
 import type { TileType } from '../systems/MapGrid';
 import { repairCost } from '../systems/ShelterHealth';
 import { createHelpOverlay } from '../ui/HelpOverlay';
-import { editBlockerText, TILE_TYPE_DESCRIPTIONS, upgradeBlockerText } from '../ui/labels';
+import { editBlockerText, tileTypeDescription, upgradeBlockerText } from '../ui/labels';
 import type { GameScene } from './GameScene';
 
 const HUD_HEIGHT = HUD_ROWS * TILE_SIZE;
@@ -17,20 +18,12 @@ const LINE_1_Y = TILE_SIZE / 2;
 const LINE_2_Y = TILE_SIZE * 1.5;
 const PANEL_WIDTH = 260;
 const TOWER_PANEL_HEIGHT = 170;
-const TILE_PANEL_HEIGHT = 190;
+const TILE_OPTION_TOP = 36;
+const TILE_OPTION_SPACING = 50;
+const TILE_PANEL_HEIGHT = TILE_OPTION_TOP + TILE_TYPE_ORDER.length * TILE_OPTION_SPACING + 4;
 const PANEL_MARGIN = 8;
 const TOAST_MS = 4000;
 const SPEED_ACTIONS: readonly GameAction[] = ['speed1', 'speed2', 'speed3', 'speed4'];
-const TILE_ACTIONS: Readonly<Record<TileType, GameAction>> = {
-  path: 'tilePath',
-  gravel: 'tileGravel',
-  ground: 'tileGround',
-};
-const TILE_OPTION_LABELS: Readonly<Record<TileType, string>> = {
-  path: 'Path',
-  gravel: 'Gravel',
-  ground: 'Ground',
-};
 
 const TEXT_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
   fontFamily: 'monospace',
@@ -85,8 +78,7 @@ export class UIScene extends Phaser.Scene {
     const helpButton = this.makeButton(GAME_WIDTH - 12, LINE_1_Y, '? help', () => this.gameScene.toggleHelp()).setOrigin(1, 0.5);
     this.waveText = this.add.text(helpButton.x - helpButton.width - 16, LINE_1_Y, '', TEXT_STYLE).setOrigin(1, 0.5);
 
-    this.add.text(12, LINE_2_Y, 'Speed', TEXT_STYLE).setOrigin(0, 0.5);
-    let x = 72;
+    let x = 12;
     this.speedButtons = GAME_SPEEDS.map((speed, i) => {
       const button = this.makeButton(x, LINE_2_Y, `x${speed} ${hint(SPEED_ACTIONS[i])}`, () =>
         this.gameScene.setSpeedLevel(i),
@@ -203,8 +195,8 @@ export class UIScene extends Phaser.Scene {
     const bg = this.makePanelBackground(TILE_PANEL_HEIGHT);
     this.tilePanelTitle = this.add.text(12, 10, '', { ...TEXT_STYLE, fontSize: '14px' });
     const children: Phaser.GameObjects.GameObject[] = [bg, this.tilePanelTitle];
-    this.tileOptions = (['path', 'gravel', 'ground'] as const).map((type, i) => {
-      const y = 36 + i * 50;
+    this.tileOptions = TILE_TYPE_ORDER.map((type, i) => {
+      const y = TILE_OPTION_TOP + i * TILE_OPTION_SPACING;
       const button = this.makeButton(12, y, '', () => this.gameScene.editTileMenu(type))
         .on(Phaser.Input.Events.GAMEOBJECT_POINTER_OVER, () => this.gameScene.previewEdit(type))
         .on(Phaser.Input.Events.GAMEOBJECT_POINTER_OUT, () => this.gameScene.previewEdit(undefined));
@@ -222,9 +214,9 @@ export class UIScene extends Phaser.Scene {
     setText(this.tilePanelTitle, `Tile ${tile.col},${tile.row} · ${this.gameScene.describeTile(tile)}`);
     for (const row of this.tileOptions) {
       const option = options.find((o) => o.type === row.type)!;
-      setText(row.button, `${TILE_OPTION_LABELS[row.type]} (${option.cost}) [${keyHint(GAME_BINDINGS, TILE_ACTIONS[row.type])}]`);
+      setText(row.button, `${TILE_TYPES[row.type].name} (${option.cost}) ${hint(tileEditAction(row.type))}`);
       setEnabled(row.button, option.blocker === null);
-      setText(row.reason, option.blocker ? editBlockerText(option.blocker, row.type) : TILE_TYPE_DESCRIPTIONS[row.type]);
+      setText(row.reason, option.blocker ? editBlockerText(option.blocker, row.type) : tileTypeDescription(row.type));
       setColor(row.reason, option.blocker ? '#d94c3d' : '#9c9480');
     }
     this.placePanel(this.tilePanel, tile, TILE_PANEL_HEIGHT);

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { GRID_COLS, GRID_ROWS, HUD_ROWS, STATUS_ROWS, TILE_SIZE } from '../src/config';
 import { MAPS, shelterTile, type TileCoord } from '../src/data/maps';
 import { MapGrid, type TileType } from '../src/systems/MapGrid';
-import { PathField } from '../src/systems/PathField';
+import { PathField, stepCost } from '../src/systems/PathField';
 
 // Every in-bounds tile along the waypoints, in walking order.
 function waypointTiles(waypoints: readonly TileCoord[]): TileCoord[] {
@@ -22,11 +22,11 @@ function waypointTiles(waypoints: readonly TileCoord[]): TileCoord[] {
   return tiles;
 }
 
-// A 7×5 grid from a picture: '.' ground, '#' path, '~' gravel.
+// A 7×5 grid from a picture: '.' ground, '#' path, '~' gravel, 'w' water.
 function gridFrom(rows: string[]): (tile: TileCoord) => TileType {
   return ({ col, row }) => {
     const c = rows[row]?.[col];
-    return c === '#' ? 'path' : c === '~' ? 'gravel' : 'ground';
+    return c === '#' ? 'path' : c === '~' ? 'gravel' : c === 'w' ? 'water' : 'ground';
   };
 }
 
@@ -59,6 +59,22 @@ describe('PathField', () => {
     const route = field.route({ col: 0, row: 1 });
     expect(route).toContainEqual({ col: 3, row: 2 });
     expect(route).not.toContainEqual({ col: 3, row: 1 });
+  });
+
+  it('costs 1 / speed per tile: 2 on gravel, 4 on water', () => {
+    expect(stepCost('path')).toBe(1);
+    expect(stepCost('gravel')).toBe(2);
+    expect(stepCost('water')).toBe(4);
+    expect(stepCost('ground')).toBe(Infinity);
+  });
+
+  it('diverts enemies from water to a gravel route of equal length', () => {
+    const split = ['.......', '.#www#.', '##...##', '.#~~~#.', '.......'];
+    const field = new PathField(7, 5, gridFrom(split), { col: 6, row: 2 });
+    const route = field.route({ col: 0, row: 2 });
+    expect(route).toContainEqual({ col: 3, row: 3 });
+    expect(route).not.toContainEqual({ col: 3, row: 1 });
+    expect(field.distance({ col: 0, row: 2 })).toBe(11);
   });
 
   it('slows the only route instead when there is no alternative', () => {

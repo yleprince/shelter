@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GAME_SPEEDS, MAX_FRAME_DELTA_MS, SIM_STEP_MS } from '../src/config';
+import { GAME_SPEEDS, MAX_FRAME_DELTA_MS, MAX_SIM_STEPS_PER_FRAME, SIM_STEP_MS } from '../src/config';
 import { GameClock } from '../src/systems/GameClock';
 
 describe('GameClock', () => {
@@ -14,7 +14,7 @@ describe('GameClock', () => {
       const clock = new GameClock();
       clock.setSpeedLevel(level);
       expect(clock.speed).toBe(speed);
-      expect(clock.advance(SIM_STEP_MS * 3)).toBe(3 * speed);
+      expect(clock.advance(SIM_STEP_MS)).toBe(speed);
     });
   });
 
@@ -26,9 +26,21 @@ describe('GameClock', () => {
 
   it('caps a stalled frame before applying speed', () => {
     const clock = new GameClock();
+    expect(clock.advance(10_000)).toBe(Math.floor(MAX_FRAME_DELTA_MS / SIM_STEP_MS));
+  });
+
+  it('never hands out more than MAX_SIM_STEPS_PER_FRAME steps', () => {
+    const clock = new GameClock();
     clock.setSpeedLevel(GAME_SPEEDS.length - 1);
-    const maxSpeed = GAME_SPEEDS[GAME_SPEEDS.length - 1];
-    expect(clock.advance(10_000)).toBe(Math.floor((MAX_FRAME_DELTA_MS * maxSpeed) / SIM_STEP_MS));
+    expect(clock.advance(MAX_FRAME_DELTA_MS)).toBe(MAX_SIM_STEPS_PER_FRAME);
+  });
+
+  it('drops time over the step cap instead of banking it', () => {
+    const clock = new GameClock();
+    clock.setSpeedLevel(GAME_SPEEDS.length - 1);
+    clock.advance(MAX_FRAME_DELTA_MS);
+    clock.setSpeedLevel(0);
+    expect(clock.advance(SIM_STEP_MS)).toBe(1);
   });
 
   it('ignores unknown speed levels', () => {

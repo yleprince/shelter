@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { KEY_BINDINGS, type BindingScene } from '../src/data/keybindings';
+import { GAME_SPEEDS } from '../src/config';
+import { GAME_BINDINGS, KEY_BINDINGS, tileEditAction, type BindingScene } from '../src/data/keybindings';
+import { TILE_TYPE_ORDER, TILE_TYPES } from '../src/data/tileTypes';
 
 const SCENES: BindingScene[] = ['game', 'mapSelect', 'gameOver'];
 
@@ -29,5 +31,22 @@ describe('key bindings', () => {
     for (const binding of KEY_BINDINGS.filter((b) => b.repeatable)) {
       for (const sequence of binding.sequences) expect(sequence).toHaveLength(1);
     }
+  });
+
+  it('describes each speed key with its GAME_SPEEDS value', () => {
+    GAME_SPEEDS.forEach((speed, i) => {
+      const binding = GAME_BINDINGS.find((b) => b.action === `speed${i + 1}`);
+      expect(binding?.description).toBe(`Speed x${speed}`);
+    });
+  });
+
+  it('binds r + each tile type edit key, in table order', () => {
+    const tileBindings = GAME_BINDINGS.filter((b) => b.group === 'Tiles');
+    expect(tileBindings.map((b) => b.action)).toEqual(TILE_TYPE_ORDER.map(tileEditAction));
+    for (const type of TILE_TYPE_ORDER) {
+      const binding = GAME_BINDINGS.find((b) => b.action === tileEditAction(type));
+      expect(binding?.sequences).toEqual([['r', TILE_TYPES[type].editKey]]);
+    }
+    expect(GAME_BINDINGS.find((b) => b.action === 'tileWater')?.sequences).toEqual([['r', 'w']]);
   });
 });

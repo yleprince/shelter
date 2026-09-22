@@ -79,7 +79,7 @@ shelter/
       ShelterHealth.ts     # shelter HP, damage, repair + repair cost
       Economy.ts           # currency balance, earn/spend
       ScoreManager.ts       # tracks survival time, kills, computes final score breakdown
-      MapGrid.ts           # tile-type grid (path/gravel/ground), occupied tiles, tile↔world
+      MapGrid.ts           # tile-type grid, occupied tiles, tile↔world
       PathField.ts         # Dijkstra from the shelter: fastest next tile from anywhere
       TileFollower.ts      # walks tile centre to tile centre, asking for the next tile
       TileEditor.ts        # tile edit cost and refusal rules
@@ -89,6 +89,7 @@ shelter/
       enemyTiers.ts        # enemy T1–T8 base stats and wave ranges
       specialEnemies.ts     # runner / armored / splitter stats and traits
       keybindings.ts        # every key binding, per scene (source of truth for help too)
+      tileTypes.ts          # tile types: walkable, speed, edit cost/key, unlock wave
       textures.ts          # texture keys and render depths
   tests/                 # Vitest specs for the plain-TS systems and data tables
   docs/specs/            # feature specs
@@ -118,7 +119,7 @@ only add the Phaser sprites on top.
   reward (all computed per wave by `WaveComposer`), dies when HP reaches `0`. Specials
   carry one trait each, set as optional `EnemySpec` fields and applied generically by
   `Enemy` (never `if (kind === …)`):
-  - **Runner**: `ignoresGravel`.
+  - **Runner**: `ignoresGravel` (gravel only: water still slows it).
   - **Armored**: `armor`; each hit deals `max(damage − ARMORED_ARMOR, ARMOR_MIN_DAMAGE)`.
   - **Splitter**: `splitsInto`; on death spawns `SPLITTER_CHILD_COUNT` smaller T1-based
     children where it died, worth `SPLITTER_CHILD_REWARD_RATIO` of T1's reward, each
@@ -144,20 +145,24 @@ only add the Phaser sprites on top.
   otherwise); the first waypoint is off-map (enemies walk in from it in a straight
   lead-in to the **entry tile**, the first in-bounds one), and the last one is the
   shelter tile. `tests/maps.test.ts` checks every map against these rules.
-- Tile types (`MapGrid`): **path** (walkable), **gravel** (walkable, enemies ×
-  `GRAVEL_SPEED_MULTIPLIER`), **ground** (buildable). Towers go on any playable ground
-  tile that isn't occupied (by a tower or the shelter). The cursor shows the tile in
-  green/red plus the tower's range circle.
+- Tile types come from the `TILE_TYPES` table in `data/tileTypes.ts` (walkable, speed
+  multiplier, edit cost, unlock wave, edit key); its key order is the display order of
+  the tile panel, the `r…` hint and the help. **path** (×1), **gravel** (×0.5),
+  **water** (×0.25, unlocks at wave 150) are walkable; **ground** is the only buildable
+  one. Code reads the table instead of naming types (`if (type === …)`), so a new type
+  is a new row. Towers go on any playable ground tile that isn't occupied (by a tower or
+  the shelter). The cursor shows the tile in green/red plus the tower's range circle.
 - **Routing** (`PathField`): Dijkstra from the shelter over walkable tiles
   (4-neighbours, fixed neighbour order for ties). An edge costs the average of both
-  tiles' step costs (1 on path, `1 / GRAVEL_SPEED_MULTIPLIER` on gravel), so enemies
+  tiles' step costs (`1 / speedMultiplier`: 1 on path, 2 on gravel, 4 on water), so enemies
   take the **fastest** route. Recomputed after every edit. Enemies (`TileFollower`) ask
   for the next tile each time they reach a tile centre, so edits reroute everyone from
   where they stand. All enemies share one route; branches and dead ends are ignored.
-- **Tile edits** (`TileEditor`): `r` + `p`/`g`/`b` on the cursor, or the right-click
-  tile panel. Cost `TILE_EDIT_BASE_COST[type] + wave * TILE_EDIT_COST_PER_WAVE`, no
-  refunds, allowed any time (paused and mid-wave included). Refused when: not playable;
-  the shelter tile; the entry → ground; a tower on it; already that type; → ground under
+- **Tile edits** (`TileEditor`): `r` + the type's `editKey` (`p`/`g`/`b`/`w`) on the
+  cursor, or the right-click tile panel. Cost `editBaseCost + wave *
+  TILE_EDIT_COST_PER_WAVE`, no refunds, allowed any time (paused and mid-wave
+  included). Refused when: not playable; `locked` (wave < the type's `unlockWave`; the
+  panel still lists the option, with the unlock wave); the shelter tile; the entry → ground; a tower on it; already that type; → ground under
   (or ahead of) an enemy; → ground would cut the entry, or any enemy, off from the
   shelter; unaffordable. The status line or tile panel shows the reason. While editing,
   the board previews the route (the panel previews the hovered option's result).
@@ -194,12 +199,12 @@ spawn pacing), composed by `WaveComposer`:
 All the constants above (increments, scale factors, starting currency, boss, repair,
 refund, speed, special, tile-edit and key-timeout settings, shelter HP) belong in
 `src/config.ts` as named constants, and the per-level / per-tier / per-special /
-per-map / key-binding tables in `src/data/`. Never hardcode them
+per-map / per-tile-type / key-binding tables in `src/data/`. Never hardcode them
 inline in entities/systems, so balancing stays a data-only change.
 
 ### Game speed and pause
-- x1 / x2 / x10 / x50 (`GAME_SPEEDS`), picked from the HUD or keys 1–4; each game
-  starts at x1, unpaused.
+- x1 / x5 / x100 / x500 (`GAME_SPEEDS`), picked from the HUD or keys 1–4; each game
+  starts at x1, unpaused. The key descriptions are built from `GAME_SPEEDS`.
 - Space (or the HUD button) toggles pause. `GameClock.advance()` returns 0 steps while
   paused and drops the delta, so resuming never bursts. Everything simulated stops;
   the player can still build, upgrade, sell, edit, repair and start the next wave
@@ -208,7 +213,10 @@ inline in entities/systems, so balancing stays a data-only change.
 - `GameClock` turns each frame's real delta (capped at `MAX_FRAME_DELTA_MS`) × speed
   into fixed `SIM_STEP_MS` steps. All gameplay (waves, enemies, towers, projectiles,
   score) updates per step; sprites render once per frame. Never feed the raw frame
-  delta into gameplay: at x50 projectiles would tunnel through enemies.
+  delta into gameplay: at x500 projectiles would tunnel through enemies.
+- `advance()` never returns more than `MAX_SIM_STEPS_PER_FRAME` steps; time over the
+  cap is dropped, not banked, so on a slow machine x500 just runs below x500 instead of
+  locking up the tab.
 - Survival time counts simulated time, so the score doesn't depend on speed.
 
 ### Scoring

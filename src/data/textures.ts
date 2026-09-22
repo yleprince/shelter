@@ -5,6 +5,7 @@ export const TEXTURES = {
   ground: 'tile-ground',
   path: 'tile-path',
   gravel: 'tile-gravel',
+  water: 'tile-water',
   towerBase: 'tower-base',
   projectile: 'projectile',
   shelter: 'shelter',

@@ -12,9 +12,10 @@ import {
   STATUS_ROWS,
   TILE_SIZE,
 } from '../config';
-import { GAME_BINDINGS, sequenceLabel, type GameAction } from '../data/keybindings';
+import { GAME_BINDINGS, sequenceLabel, tileEditAction, type GameAction } from '../data/keybindings';
 import { getMap, shelterTile, type MapDefinition, type TileCoord } from '../data/maps';
 import { DEPTH, TEXTURES } from '../data/textures';
+import { TILE_TYPE_ORDER, TILE_TYPES } from '../data/tileTypes';
 import { TOWER_LEVELS, TOWER_PLACE_COST } from '../data/towerLevels';
 import { Enemy, type EnemyNavigator } from '../entities/Enemy';
 import { Projectile } from '../entities/Projectile';
@@ -26,10 +27,17 @@ import { KeySequence, keyToken } from '../systems/KeySequence';
 import { MapGrid, sameTile, type TileType } from '../systems/MapGrid';
 import { PathField } from '../systems/PathField';
 import { ScoreManager } from '../systems/ScoreManager';
-import { editBlocker, editCost, withEdit, type EditBlocker, type EditContext } from '../systems/TileEditor';
+import {
+  editBlocker,
+  editCost,
+  isTileTypeUnlocked,
+  withEdit,
+  type EditBlocker,
+  type EditContext,
+} from '../systems/TileEditor';
 import { TileCursor } from '../systems/TileCursor';
 import { WaveManager } from '../systems/WaveManager';
-import { editBlockerText, repairBlockerText, TILE_TYPE_DESCRIPTIONS, upgradeBlockerText } from '../ui/labels';
+import { editBlockerText, repairBlockerText, tileTypeDescription, upgradeBlockerText } from '../ui/labels';
 import type { GameOverData } from './GameOverScene';
 import type { GameSceneData } from './MapSelectScene';
 
@@ -37,12 +45,11 @@ const TILE_TEXTURES: Readonly<Record<TileType, string>> = {
   path: TEXTURES.path,
   gravel: TEXTURES.gravel,
   ground: TEXTURES.ground,
+  water: TEXTURES.water,
 };
-const EDIT_ACTIONS: Partial<Record<GameAction, TileType>> = {
-  tilePath: 'path',
-  tileGravel: 'gravel',
-  tileGround: 'ground',
-};
+const EDIT_ACTIONS: Partial<Record<GameAction, TileType>> = Object.fromEntries(
+  TILE_TYPE_ORDER.map((type) => [tileEditAction(type), type]),
+);
 const MOVES: Partial<Record<GameAction, [number, number]>> = {
   moveLeft: [-1, 0],
   moveDown: [0, 1],
@@ -221,7 +228,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   editOptions(tile: TileCoord): EditOption[] {
-    return (['path', 'gravel', 'ground'] as const).map((type) => ({
+    return TILE_TYPE_ORDER.map((type) => ({
       type,
       cost: editCost(type, this.waves.wave),
       blocker: editBlocker(tile, type, this.editContext()),
@@ -263,7 +270,7 @@ export class GameScene extends Phaser.Scene {
     const tower = this.towerAt(tile);
     if (tower) return `Tower Lv${tower.progress.level} · sells for ${tower.progress.sellValue}`;
     const entry = sameTile(tile, this.grid.entry) ? ' · entry' : '';
-    return `${TILE_TYPE_DESCRIPTIONS[this.grid.tileType(tile)]}${entry}`;
+    return `${tileTypeDescription(this.grid.tileType(tile))}${entry}`;
   }
 
   private say(text: string): void {
@@ -278,9 +285,10 @@ export class GameScene extends Phaser.Scene {
         .map((s) => {
           const rest = sequenceLabel(s.slice(pending.length));
           const type = EDIT_ACTIONS[binding.action];
-          return type
-            ? `${rest} ${type} ${editCost(type, this.waves.wave)}`
-            : `${rest} ${binding.description.toLowerCase()}`;
+          if (!type) return `${rest} ${binding.description.toLowerCase()}`;
+          const wave = this.waves.wave;
+          const price = isTileTypeUnlocked(type, wave) ? editCost(type, wave) : `(wave ${TILE_TYPES[type].unlockWave})`;
+          return `${rest} ${type} ${price}`;
         }),
     );
     return `${sequenceLabel(pending)}…  ${options.join(' · ')}`;

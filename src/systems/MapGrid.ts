@@ -1,11 +1,12 @@
 import type { TileCoord } from '../data/maps';
+import { TILE_TYPES, type TileType } from '../data/tileTypes';
+
+export type { TileType };
 
 export interface Point {
   x: number;
   y: number;
 }
-
-export type TileType = 'path' | 'gravel' | 'ground';
 
 // A map's waypoints only define its initial layout: path along them, ground everywhere
 // else. The player can edit tile types afterwards; the entry and shelter tiles are fixed.
@@ -57,7 +58,7 @@ export class MapGrid {
   }
 
   isWalkable(tile: TileCoord): boolean {
-    return this.isInBounds(tile) && this.tileType(tile) !== 'ground';
+    return this.isInBounds(tile) && TILE_TYPES[this.tileType(tile)].walkable;
   }
 
   isOccupied(tile: TileCoord): boolean {

@@ -1,5 +1,3 @@
-import type { TileType } from './systems/MapGrid';
-
 export const GAME_WIDTH = 960;
 export const GAME_HEIGHT = 640;
 
@@ -21,10 +19,8 @@ export const SHELTER_REPAIR_COST_PER_WAVE = 2;
 // Tower stats per level live in data/towerLevels.ts.
 export const TOWER_SELL_REFUND_RATIO = 0.6;
 
-// Scrap spent on edits is gone for good (no refunds), like repair.
-export const TILE_EDIT_BASE_COST: Readonly<Record<TileType, number>> = { path: 15, gravel: 30, ground: 20 };
+// Per-type edit costs, speeds and unlock waves live in data/tileTypes.ts.
 export const TILE_EDIT_COST_PER_WAVE = 1;
-export const GRAVEL_SPEED_MULTIPLIER = 0.5;
 
 export const PROJECTILE_SPEED = 400;
 export const PROJECTILE_HIT_RADIUS = 8;
@@ -60,10 +56,13 @@ export const BOSS_SPEED_MULTIPLIER = 0.5;
 export const BOSS_CONTACT_DAMAGE = 50;
 export const BOSS_REWARD = 200;
 
-export const GAME_SPEEDS: readonly number[] = [1, 2, 10, 50];
+export const GAME_SPEEDS: readonly number[] = [1, 5, 100, 500];
 export const SIM_STEP_MS = 1000 / 60;
-// A stalled tab can hand us seconds of delta; at x50 that would be minutes of simulation.
+// A stalled tab can hand us seconds of delta; at x500 that would be hours of simulation.
 export const MAX_FRAME_DELTA_MS = 100;
+// Late waves can take longer to simulate at x500 than a frame lasts; without a cap the next
+// frame's bigger delta makes it worse until the tab locks up. Time over the cap is dropped.
+export const MAX_SIM_STEPS_PER_FRAME = 600;
 
 // Like vim's timeoutlen: how long a pending multi-key sequence (gg, dd, r…) waits.
 export const KEY_SEQUENCE_TIMEOUT_MS = 1000;

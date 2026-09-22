@@ -3,12 +3,12 @@ import {
   ARMOR_MIN_DAMAGE,
   ARMORED_ARMOR,
   ENEMY_KILL_REWARD_PER_WAVE,
-  GRAVEL_SPEED_MULTIPLIER,
   SPLITTER_CHILD_COUNT,
   SPLITTER_CHILD_REWARD_RATIO,
 } from '../src/config';
 import { ENEMY_TIERS } from '../src/data/enemyTiers';
 import { SPECIAL_ENEMIES } from '../src/data/specialEnemies';
+import { TILE_TYPES } from '../src/data/tileTypes';
 import { armoredDamage, terrainSpeedMultiplier } from '../src/systems/EnemyTraits';
 import { scaledHp, scaledSpeed, specialSpec, splitterChildren } from '../src/systems/WaveComposer';
 
@@ -29,10 +29,16 @@ describe('armor', () => {
 
 describe('terrain speed', () => {
   it('slows on gravel unless the enemy ignores it', () => {
-    expect(terrainSpeedMultiplier('gravel', false)).toBe(GRAVEL_SPEED_MULTIPLIER);
+    expect(terrainSpeedMultiplier('gravel', false)).toBe(TILE_TYPES.gravel.speedMultiplier);
     expect(terrainSpeedMultiplier('gravel', true)).toBe(1);
     expect(terrainSpeedMultiplier('path', false)).toBe(1);
     expect(terrainSpeedMultiplier(undefined, false)).toBe(1);
+  });
+
+  it('slows everyone on water, runners included', () => {
+    expect(terrainSpeedMultiplier('water', false)).toBe(TILE_TYPES.water.speedMultiplier);
+    expect(terrainSpeedMultiplier('water', true)).toBe(TILE_TYPES.water.speedMultiplier);
+    expect(TILE_TYPES.water.speedMultiplier).toBeLessThan(TILE_TYPES.gravel.speedMultiplier);
   });
 });
 

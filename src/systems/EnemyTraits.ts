@@ -1,4 +1,5 @@
-import { ARMOR_MIN_DAMAGE, GRAVEL_SPEED_MULTIPLIER } from '../config';
+import { ARMOR_MIN_DAMAGE } from '../config';
+import { TILE_TYPES } from '../data/tileTypes';
 import type { TileType } from './MapGrid';
 
 export function armoredDamage(damage: number, armor: number): number {
@@ -7,5 +8,6 @@ export function armoredDamage(damage: number, armor: number): number {
 }
 
 export function terrainSpeedMultiplier(type: TileType | undefined, ignoresGravel: boolean): number {
-  return type === 'gravel' && !ignoresGravel ? GRAVEL_SPEED_MULTIPLIER : 1;
+  if (!type || (type === 'gravel' && ignoresGravel)) return 1;
+  return TILE_TYPES[type].speedMultiplier;
 }
