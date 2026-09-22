@@ -9,6 +9,9 @@ import type { EnemySpec } from '../systems/WaveComposer';
 
 const HP_BAR_HEIGHT = 4;
 const HP_BAR_GAP = 6;
+const BURN_TINT = 0xff8c3a;
+// Keeps the tint on a moment after leaving fire, so a quick crossing still shows.
+const BURN_TINT_MS = 150;
 
 export interface EnemyNavigator extends TileNavigator {
   worldToTile(point: Point): TileCoord;
@@ -30,6 +33,7 @@ export class Enemy {
   private readonly sprite: Phaser.GameObjects.Image;
   private readonly hpBar: Phaser.GameObjects.Graphics;
   private destroyed = false;
+  private burnTintMs = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -82,6 +86,7 @@ export class Enemy {
   }
 
   update(deltaMs: number): void {
+    this.burnTintMs = Math.max(0, this.burnTintMs - deltaMs);
     const terrain = terrainSpeedMultiplier(this.nav.tileTypeAt(this.follower), this.ignoresGravel);
     this.follower.advance((this.speed * terrain * deltaMs) / 1000);
   }
@@ -97,6 +102,14 @@ export class Enemy {
     return this.hp === 0;
   }
 
+  // Terrain damage: skips armor, which is meant for per-hit damage. Returns true if it killed.
+  burn(amount: number): boolean {
+    if (!this.isAlive || amount <= 0) return false;
+    this.burnTintMs = BURN_TINT_MS;
+    this.hp = Math.max(0, this.hp - amount);
+    return this.hp === 0;
+  }
+
   destroy(): void {
     this.destroyed = true;
     this.sprite.destroy();
@@ -105,6 +118,8 @@ export class Enemy {
 
   render(): void {
     this.sprite.setPosition(this.x, this.y);
+    if (this.burnTintMs > 0) this.sprite.setTint(BURN_TINT);
+    else this.sprite.clearTint();
     this.hpBar.clear();
     const width = this.sprite.displayWidth;
     const left = this.x - width / 2;

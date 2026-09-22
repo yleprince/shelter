@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TILE_TYPE_ORDER, TILE_TYPES } from '../src/data/tileTypes';
+import { killScoreMultiplier, TILE_TYPE_ORDER, TILE_TYPES } from '../src/data/tileTypes';
 
 describe('tile types', () => {
   it('has unique edit keys', () => {
@@ -22,5 +22,20 @@ describe('tile types', () => {
 
   it('keeps the initial map tiles available from the start', () => {
     for (const type of ['path', 'gravel', 'ground'] as const) expect(TILE_TYPES[type].unlockWave).toBe(0);
+  });
+
+  it('gives only fire a damage effect, at normal speed', () => {
+    expect(TILE_TYPE_ORDER.filter((type) => TILE_TYPES[type].damagePerSec)).toEqual(['fire']);
+    expect(TILE_TYPES.fire.speedMultiplier).toBe(1);
+  });
+
+  it('makes ice available from the start, with a kill score bonus', () => {
+    expect(TILE_TYPES.ice.unlockWave).toBe(0);
+    expect(killScoreMultiplier('ice')).toBe(5);
+  });
+
+  it('has no kill score bonus elsewhere', () => {
+    for (const type of TILE_TYPE_ORDER.filter((t) => t !== 'ice')) expect(killScoreMultiplier(type)).toBe(1);
+    expect(killScoreMultiplier(undefined)).toBe(1);
   });
 });

@@ -48,6 +48,8 @@ describe('key bindings', () => {
       expect(binding?.sequences).toEqual([['r', TILE_TYPES[type].editKey]]);
     }
     expect(GAME_BINDINGS.find((b) => b.action === 'tileWater')?.sequences).toEqual([['r', 'w']]);
+    expect(GAME_BINDINGS.find((b) => b.action === 'tileFire')?.sequences).toEqual([['r', 'f']]);
+    expect(GAME_BINDINGS.find((b) => b.action === 'tileIce')?.sequences).toEqual([['r', 'i']]);
   });
 
   it('binds U to max upgrade and S to the shelter upgrade', () => {

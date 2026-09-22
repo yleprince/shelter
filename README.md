@@ -16,8 +16,10 @@ longer you survive, the more points you bank.
   build there and the turret's range.
 - Open a turret to upgrade it (up to Lv8; higher levels unlock at later waves) or sell
   it for 60% of the scrap you put in.
-- **Reshape the path**: turn any tile into path, gravel (enemies walk at half speed)
-  or buildable ground, for a price that grows each wave. Enemies reroute on the fly,
+- **Reshape the path**: turn any tile into path, gravel (enemies walk at half speed),
+  ice (enemies rush through it, but kills on ice score five times the points),
+  water and fire (unlocked at waves 150 and 250: water slows even runners, fire burns
+  whatever walks on it) or buildable ground, for a price that grows each wave. Enemies reroute on the fly,
   so gravel on one of two routes diverts them to the other. You can't cut the route
   to the shelter completely.
 - Turrets auto-fire at the nearest enemy in range.
@@ -41,7 +43,7 @@ full list. The highlights, vim style:
 | `0` `$` `gg` `G` `w` `b` `gs` | First / last column, top / bottom row, next / previous tower, shelter |
 | `Enter` / `i` | Place a turret (Enter opens a turret's panel) |
 | `u` / `dd` | Upgrade / sell the turret under the cursor |
-| `r` then `p` / `g` / `b` | Turn the tile into path / gravel / buildable ground |
+| `r` then `p` / `g` / `w` / `f` / `i` / `b` | Turn the tile into path / gravel / water / fire / ice / buildable ground |
 | `Space`, `1`–`4`, `R`, `n` | Pause, speed, repair, next wave |
 
 With the mouse: left-click to build or open a turret, right-click a tile to edit it.

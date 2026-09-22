@@ -67,6 +67,8 @@ export class BootScene extends Phaser.Scene {
     this.makePathTile();
     this.makeGravelTile();
     this.makeWaterTile();
+    this.makeFireTile();
+    this.makeIceTile();
     this.makeTower();
     this.makeEnemies();
     this.makeProjectile();
@@ -129,6 +131,45 @@ export class BootScene extends Phaser.Scene {
         g.arc(x + 11, y - 2, 4, Math.PI * 0.1, Math.PI * 0.9, true);
         g.strokePath();
       }
+    });
+  }
+
+  // Flame tongues on scorched ground: the warm colours set it apart from brown path.
+  private makeFireTile(): void {
+    const rng = new Phaser.Math.RandomDataGenerator(['fire']);
+    this.draw(TEXTURES.fire, TILE_SIZE, TILE_SIZE, (g) => {
+      g.fillStyle(0x2a1a14).fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+      for (const [color, height] of [
+        [0xc0321f, 1],
+        [0xf07a1a, 0.7],
+        [0xffd24a, 0.4],
+      ] as const) {
+        g.fillStyle(color);
+        for (let i = 0; i < 4; i++) {
+          const x = 4 + i * 9 + rng.between(-1, 1);
+          const h = (TILE_SIZE - 10) * height * rng.realInRange(0.7, 1);
+          g.fillTriangle(x - 4, TILE_SIZE - 3, x + 4, TILE_SIZE - 3, x + rng.between(-2, 2), TILE_SIZE - 3 - h);
+        }
+      }
+    });
+  }
+
+  // Pale cyan with white streaks: much lighter than water's deep blue.
+  private makeIceTile(): void {
+    const rng = new Phaser.Math.RandomDataGenerator(['ice']);
+    this.draw(TEXTURES.ice, TILE_SIZE, TILE_SIZE, (g) => {
+      g.fillStyle(0xa8e4ef).fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+      g.fillStyle(0xd4f4fa);
+      for (let i = 0; i < 5; i++) {
+        g.fillRect(rng.between(0, TILE_SIZE - 8), rng.between(0, TILE_SIZE - 8), rng.between(4, 8), rng.between(4, 8));
+      }
+      g.lineStyle(2, 0xffffff, 0.9);
+      for (let i = 0; i < 3; i++) {
+        const x = rng.between(2, TILE_SIZE - 14);
+        const y = rng.between(6, TILE_SIZE - 6);
+        g.lineBetween(x, y + 4, x + 12, y - 4);
+      }
+      g.lineStyle(1, 0x6fb8c8, 0.6).strokeRect(0, 0, TILE_SIZE, TILE_SIZE);
     });
   }
 

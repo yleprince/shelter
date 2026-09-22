@@ -15,7 +15,7 @@ import {
 import { GAME_BINDINGS, sequenceLabel, tileEditAction, type GameAction } from '../data/keybindings';
 import { getMap, shelterTile, type MapDefinition, type TileCoord } from '../data/maps';
 import { DEPTH, TEXTURES } from '../data/textures';
-import { TILE_TYPE_ORDER, TILE_TYPES } from '../data/tileTypes';
+import { killScoreMultiplier, TILE_TYPE_ORDER, TILE_TYPES } from '../data/tileTypes';
 import { TOWER_LEVELS, TOWER_PLACE_COST } from '../data/towerLevels';
 import { Enemy, type EnemyNavigator } from '../entities/Enemy';
 import { Projectile } from '../entities/Projectile';
@@ -25,6 +25,7 @@ import { Economy } from '../systems/Economy';
 import { GameClock } from '../systems/GameClock';
 import { KeySequence, keyToken } from '../systems/KeySequence';
 import { MapGrid, sameTile, type TileType } from '../systems/MapGrid';
+import { terrainDamage } from '../systems/EnemyTraits';
 import { PathField } from '../systems/PathField';
 import { ScoreManager } from '../systems/ScoreManager';
 import {
@@ -52,6 +53,8 @@ const TILE_TEXTURES: Readonly<Record<TileType, string>> = {
   gravel: TEXTURES.gravel,
   ground: TEXTURES.ground,
   water: TEXTURES.water,
+  fire: TEXTURES.fire,
+  ice: TEXTURES.ice,
 };
 const EDIT_ACTIONS: Partial<Record<GameAction, TileType>> = Object.fromEntries(
   TILE_TYPE_ORDER.map((type) => [tileEditAction(type), type]),
@@ -71,6 +74,10 @@ const SPEED_ACTIONS: readonly GameAction[] = ['speed1', 'speed2', 'speed3', 'spe
 const HELP_ACTIONS: readonly GameAction[] = ['help', 'cancel'];
 const MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'AltGraph']);
 const CURSOR_BRACKET = 10;
+const KILL_POPUP_RISE_PX = 24;
+const KILL_POPUP_MS = 700;
+// At x500 a wave can die on ice faster than popups fade; past this many, skip new ones.
+const KILL_POPUP_MAX = 30;
 
 export interface EditOption {
   type: TileType;
@@ -108,6 +115,7 @@ export class GameScene extends Phaser.Scene {
   private message = '';
   private messageMs = 0;
   private isOver = false;
+  private killPopups = 0;
 
   constructor() {
     super('GameScene');
@@ -141,6 +149,7 @@ export class GameScene extends Phaser.Scene {
     this.towers = [];
     this.projectiles = [];
     this.tileImages = [];
+    this.killPopups = 0;
     this.selectedTower = undefined;
     this.tileMenu = undefined;
     this.previewRoute = undefined;
@@ -293,7 +302,7 @@ export class GameScene extends Phaser.Scene {
     const tower = this.towerAt(tile);
     if (tower) return `Tower Lv${tower.progress.level} · sells for ${tower.progress.sellValue}`;
     const entry = sameTile(tile, this.grid.entry) ? ' · entry' : '';
-    return `${tileTypeDescription(this.grid.tileType(tile))}${entry}`;
+    return `${tileTypeDescription(this.grid.tileType(tile), this.waves.wave)}${entry}`;
   }
 
   private say(text: string): void {
@@ -397,12 +406,15 @@ export class GameScene extends Phaser.Scene {
       this.enemies.push(new Enemy(this, this.nav, spec, this.grid.tileToWorld(this.grid.leadIn), this.grid.entry));
     }
 
-    for (const enemy of this.enemies) {
+    // A splitter burned to death pushes its children onto this list; they start next step.
+    for (const enemy of [...this.enemies]) {
       enemy.update(deltaMs);
       if (enemy.reachedEnd && enemy.isAlive) {
         this.shelter.takeDamage(enemy.damage);
         enemy.destroy();
         if (this.clock.dropToBaseSpeed()) droppedSpeed = true;
+      } else if (enemy.burn(terrainDamage(this.nav.tileTypeAt(enemy), this.waves.wave, deltaMs))) {
+        this.onEnemyKilled(enemy);
       }
     }
 
@@ -431,7 +443,9 @@ export class GameScene extends Phaser.Scene {
 
   private onEnemyKilled(enemy: Enemy): void {
     enemy.destroy();
-    this.score.addKill();
+    const multiplier = killScoreMultiplier(this.nav.tileTypeAt({ x: enemy.x, y: enemy.y }));
+    this.score.addKill(multiplier > 1);
+    if (multiplier > 1) this.showKillPopup(enemy.x, enemy.y, multiplier);
     this.economy.earn(enemy.reward);
     // Children spawn outside the wave queue; WaveManager still waits for them because it
     // counts every live enemy before calling the wave cleared.
@@ -439,6 +453,25 @@ export class GameScene extends Phaser.Scene {
       const child = new Enemy(this, this.nav, spec, { x: enemy.x, y: enemy.y }, enemy.target);
       child.advanceBy(i * SPLITTER_CHILD_SPACING_PX);
       this.enemies.push(child);
+    });
+  }
+
+  private showKillPopup(x: number, y: number, multiplier: number): void {
+    if (this.killPopups >= KILL_POPUP_MAX) return;
+    this.killPopups++;
+    const popup = this.add
+      .text(x, y, `×${multiplier}`, { fontFamily: 'monospace', fontSize: '14px', color: '#bff4ff', stroke: '#0b2a33', strokeThickness: 3 })
+      .setOrigin(0.5)
+      .setDepth(DEPTH.projectile);
+    this.tweens.add({
+      targets: popup,
+      y: y - KILL_POPUP_RISE_PX,
+      alpha: 0,
+      duration: KILL_POPUP_MS,
+      onComplete: () => {
+        popup.destroy();
+        this.killPopups--;
+      },
     });
   }
 

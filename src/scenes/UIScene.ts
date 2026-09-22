@@ -256,7 +256,7 @@ export class UIScene extends Phaser.Scene {
       const option = options.find((o) => o.type === row.type)!;
       setText(row.button, `${TILE_TYPES[row.type].name} (${option.cost}) ${hint(tileEditAction(row.type))}`);
       setEnabled(row.button, option.blocker === null);
-      setText(row.reason, option.blocker ? editBlockerText(option.blocker, row.type) : tileTypeDescription(row.type));
+      setText(row.reason, option.blocker ? editBlockerText(option.blocker, row.type) : tileTypeDescription(row.type, this.gameScene.waves.wave));
       setColor(row.reason, option.blocker ? '#d94c3d' : '#9c9480');
     }
     this.placePanel(this.tilePanel, tile, TILE_PANEL_HEIGHT);

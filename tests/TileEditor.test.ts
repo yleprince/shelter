@@ -81,6 +81,13 @@ describe('editBlocker', () => {
     expect(editBlocker(open.grid.entry, 'water', open)).toBeNull();
   });
 
+  it('locks fire until its unlock wave', () => {
+    const unlock = TILE_TYPES.fire.unlockWave;
+    expect(unlock).toBe(250);
+    expect(editBlocker({ col: 2, row: 2 }, 'fire', setup({ wave: unlock - 1 }))).toBe('locked');
+    expect(editBlocker({ col: 2, row: 2 }, 'fire', setup({ wave: unlock, balance: editCost('fire', unlock) }))).toBeNull();
+  });
+
   it('never refuses water for enemies or connectivity: it stays walkable', () => {
     const ctx = setup({ wave: TILE_TYPES.water.unlockWave, enemyTiles: [{ col: 3, row: 3 }] });
     expect(editBlocker({ col: 3, row: 3 }, 'water', ctx)).toBeNull();

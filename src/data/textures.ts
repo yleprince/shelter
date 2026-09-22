@@ -7,6 +7,8 @@ export const TEXTURES = {
   path: 'tile-path',
   gravel: 'tile-gravel',
   water: 'tile-water',
+  fire: 'tile-fire',
+  ice: 'tile-ice',
   towerBase: 'tower-base',
   projectile: 'projectile',
 } as const;

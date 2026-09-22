@@ -71,7 +71,7 @@ shelter/
       WaveManager.ts       # wave phases (breather → spawning → clearing), spawn queue
       WaveComposer.ts      # pure functions: tier/special mix, interleaving, boss waves,
                            #   stat scaling, splitter children
-      EnemyTraits.ts       # armor damage, gravel speed multiplier
+      EnemyTraits.ts       # armor damage, terrain speed multiplier and damage
       GameClock.ts         # speed multiplier, pause, fixed-step accumulator
       KeySequence.ts       # vim-style key sequences (gg, dd, r…) with timeout → actions
       TileCursor.ts        # keyboard cursor: position, clamping, motions, tower jumps
@@ -154,19 +154,24 @@ only add the Phaser sprites on top.
   lead-in to the **entry tile**, the first in-bounds one), and the last one is the
   shelter tile. `tests/maps.test.ts` checks every map against these rules.
 - Tile types come from the `TILE_TYPES` table in `data/tileTypes.ts` (walkable, speed
-  multiplier, edit cost, unlock wave, edit key); its key order is the display order of
+  multiplier, edit cost, unlock wave, edit key, optional kill score multiplier and damage per second); its key order is the display order of
   the tile panel, the `r…` hint and the help. **path** (×1), **gravel** (×0.5),
-  **water** (×0.25, unlocks at wave 150) are walkable; **ground** is the only buildable
-  one. Code reads the table instead of naming types (`if (type === …)`), so a new type
+  **water** (×0.25, unlocks at wave 150), **fire** (×1, unlocks at wave 250) and **ice**
+  (×1.5, kills on it score ×5) are walkable; **ground** is the only buildable one. Code reads the table instead of naming types (`if (type === …)`), so a new type
   is a new row. Towers go on any playable ground tile that isn't occupied (by a tower or
   the shelter). The cursor shows the tile in green/red plus the tower's range circle.
+- **Fire** burns every enemy on it each sim step for `(base + wave × perWave) × stepMs /
+  1000` (`EnemyTraits.terrainDamage`, 200 + 20 × wave per second). `Enemy.burn` skips
+  armor, and `GameScene` handles a burn death like a projectile kill (scrap, kill,
+  splitter children). Burning enemies get an orange tint. Routing ignores fire: it
+  only looks at speed.
 - **Routing** (`PathField`): Dijkstra from the shelter over walkable tiles
   (4-neighbours, fixed neighbour order for ties). An edge costs the average of both
-  tiles' step costs (`1 / speedMultiplier`: 1 on path, 2 on gravel, 4 on water), so enemies
-  take the **fastest** route. Recomputed after every edit. Enemies (`TileFollower`) ask
+  tiles' step costs (`1 / speedMultiplier`: 1 on path, 2 on gravel, 4 on water, ≈0.67 on
+  ice), so enemies take the **fastest** route and are drawn onto ice. Recomputed after every edit. Enemies (`TileFollower`) ask
   for the next tile each time they reach a tile centre, so edits reroute everyone from
   where they stand. All enemies share one route; branches and dead ends are ignored.
-- **Tile edits** (`TileEditor`): `r` + the type's `editKey` (`p`/`g`/`b`/`w`) on the
+- **Tile edits** (`TileEditor`): `r` + the type's `editKey` (`p`/`g`/`b`/`w`/`f`/`i`) on the
   cursor, or the right-click tile panel. Cost `editBaseCost + wave *
   TILE_EDIT_COST_PER_WAVE`, no refunds, allowed any time (paused and mid-wave
   included). Refused when: not playable; `locked` (wave < the type's `unlockWave`; the
@@ -235,9 +240,13 @@ inline in entities/systems, so balancing stays a data-only change.
 Final score combines all three axes discussed for this game:
 ```
 score = floor(( survivalSeconds * SURVIVAL_POINTS_PER_SEC
-              + totalKills * POINTS_PER_KILL
+              + normalKills * POINTS_PER_KILL
+              + iceKills * POINTS_PER_KILL * TILE_TYPES.ice.killScoreMultiplier
               + currencyRemaining * POINTS_PER_SAVED_CURRENCY ) * mapScoreMultiplier)
 ```
+An ice kill is an enemy that dies while its position is on an ice tile (`GameScene`
+checks the tile and shows a `×5` popup). Only the score changes, never the scrap
+reward. The game over kills line counts all kills; ice kills get their own line.
 `ScoreManager` tracks survival time and kills live during play; the final value is
 computed once and shown on `GameOverScene`. Point weights are constants in
 `config.ts`.

@@ -1,4 +1,5 @@
 import { TILE_TYPES } from '../data/tileTypes';
+import { terrainDamagePerSec } from '../systems/EnemyTraits';
 import type { ShelterLevel } from '../data/shelterLevels';
 import type { TowerLevel } from '../data/towerLevels';
 import type { TileType } from '../systems/MapGrid';
@@ -6,10 +7,15 @@ import type { RepairBlocker } from '../systems/ShelterHealth';
 import type { EditBlocker } from '../systems/TileEditor';
 import type { UpgradeBlocker } from '../systems/UpgradePlan';
 
-export function tileTypeDescription(type: TileType): string {
-  const { name, walkable, speedMultiplier } = TILE_TYPES[type];
+export function tileTypeDescription(type: TileType, wave: number): string {
+  const { name, walkable, speedMultiplier, killScoreMultiplier } = TILE_TYPES[type];
   if (!walkable) return `${name} (buildable)`;
-  return speedMultiplier === 1 ? name : `${name} · enemies ×${speedMultiplier}`;
+  const parts = [name];
+  if (speedMultiplier !== 1) parts.push(`enemies ×${speedMultiplier}`);
+  const dps = terrainDamagePerSec(type, wave);
+  if (dps > 0) parts.push(`${Math.round(dps)} dmg/s`);
+  if (killScoreMultiplier) parts.push(`kill score ×${killScoreMultiplier}`);
+  return parts.join(' · ');
 }
 
 export function editBlockerText(blocker: EditBlocker, type: TileType): string {

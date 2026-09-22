@@ -9,7 +9,7 @@ import {
 import { ENEMY_TIERS } from '../src/data/enemyTiers';
 import { SPECIAL_ENEMIES } from '../src/data/specialEnemies';
 import { TILE_TYPES } from '../src/data/tileTypes';
-import { armoredDamage, terrainSpeedMultiplier } from '../src/systems/EnemyTraits';
+import { armoredDamage, terrainDamage, terrainDamagePerSec, terrainSpeedMultiplier } from '../src/systems/EnemyTraits';
 import { scaledHp, scaledSpeed, specialSpec, splitterChildren } from '../src/systems/WaveComposer';
 
 const special = (id: string) => SPECIAL_ENEMIES.find((s) => s.id === id)!;
@@ -39,6 +39,33 @@ describe('terrain speed', () => {
     expect(terrainSpeedMultiplier('water', false)).toBe(TILE_TYPES.water.speedMultiplier);
     expect(terrainSpeedMultiplier('water', true)).toBe(TILE_TYPES.water.speedMultiplier);
     expect(TILE_TYPES.water.speedMultiplier).toBeLessThan(TILE_TYPES.gravel.speedMultiplier);
+  });
+
+  it('speeds everyone up on ice, runners included', () => {
+    expect(terrainSpeedMultiplier('ice', false)).toBe(TILE_TYPES.ice.speedMultiplier);
+    expect(terrainSpeedMultiplier('ice', true)).toBe(TILE_TYPES.ice.speedMultiplier);
+    expect(TILE_TYPES.ice.speedMultiplier).toBeGreaterThan(1);
+  });
+});
+
+describe('terrain damage', () => {
+  it('scales fire damage per second with the wave: 200 + 20 × wave', () => {
+    expect(terrainDamagePerSec('fire', 0)).toBe(200);
+    expect(terrainDamagePerSec('fire', 250)).toBe(5200);
+  });
+
+  it('deals the per-second damage pro rata to the step', () => {
+    expect(terrainDamage('fire', 250, 1000)).toBe(5200);
+    expect(terrainDamage('fire', 250, 16)).toBeCloseTo(5200 * 0.016);
+  });
+
+  it('deals nothing off fire', () => {
+    for (const type of ['path', 'gravel', 'water', 'ice', 'ground'] as const) expect(terrainDamage(type, 250, 16)).toBe(0);
+    expect(terrainDamage(undefined, 250, 16)).toBe(0);
+  });
+
+  it('leaves fire speed and routing alone', () => {
+    expect(terrainSpeedMultiplier('fire', false)).toBe(1);
   });
 });
 

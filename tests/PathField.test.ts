@@ -22,12 +22,11 @@ function waypointTiles(waypoints: readonly TileCoord[]): TileCoord[] {
   return tiles;
 }
 
-// A 7×5 grid from a picture: '.' ground, '#' path, '~' gravel, 'w' water.
+const PICTURE: Readonly<Record<string, TileType>> = { '#': 'path', '~': 'gravel', w: 'water', '*': 'ice' };
+
+// A grid from a picture: '.' ground, '#' path, '~' gravel, 'w' water, '*' ice.
 function gridFrom(rows: string[]): (tile: TileCoord) => TileType {
-  return ({ col, row }) => {
-    const c = rows[row]?.[col];
-    return c === '#' ? 'path' : c === '~' ? 'gravel' : c === 'w' ? 'water' : 'ground';
-  };
+  return ({ col, row }) => PICTURE[rows[row]?.[col] ?? '.'] ?? 'ground';
 }
 
 describe('PathField', () => {
@@ -66,6 +65,20 @@ describe('PathField', () => {
     expect(stepCost('gravel')).toBe(2);
     expect(stepCost('water')).toBe(4);
     expect(stepCost('ground')).toBe(Infinity);
+  });
+
+  it('costs less than path on ice', () => {
+    expect(stepCost('ice')).toBeCloseTo(1 / 1.5);
+    expect(stepCost('ice')).toBeLessThan(stepCost('path'));
+  });
+
+  it('draws enemies onto an ice detour over a shorter path route', () => {
+    const detour = ['............', '.**********.', '############', '............', '............'];
+    const field = new PathField(12, 5, gridFrom(detour), { col: 11, row: 2 });
+    const route = field.route({ col: 0, row: 2 });
+    expect(route).toContainEqual({ col: 5, row: 1 });
+    expect(route).not.toContainEqual({ col: 5, row: 2 });
+    expect(field.distance({ col: 0, row: 2 })).toBeLessThan(11);
   });
 
   it('diverts enemies from water to a gravel route of equal length', () => {

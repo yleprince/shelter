@@ -39,6 +39,7 @@ export class GameOverScene extends Phaser.Scene {
           '',
           `Survived ${breakdown.survivalSeconds}s`.padEnd(24) + `+${breakdown.survivalPoints}`,
           `Kills ${breakdown.kills}`.padEnd(24) + `+${breakdown.killPoints}`,
+          `Ice kills ${breakdown.iceKills}`.padEnd(24) + `+${breakdown.iceKillPoints}`,
           `Scrap saved ${breakdown.currencyRemaining}`.padEnd(24) + `+${breakdown.currencyPoints}`,
           `Map multiplier`.padEnd(24) + `x${breakdown.mapMultiplier}`,
         ].join('\n'),
