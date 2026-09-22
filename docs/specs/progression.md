@@ -1,13 +1,16 @@
 # Spec: Progression features (maps, game speed, tower levels, enemy tiers)
 
-Status: **implemented** (2026-09-22)
+Status: **implemented** on branch `feat/progression` (commit `df5d35c`, 2026-09-22).
 
-Builds on the MVP described in `CLAUDE.md`. Several items listed there as "out of
-scope for MVP" (multiple enemy types, tower upgrades, multiple paths) are brought in
-scope by this spec; `CLAUDE.md` must be updated alongside the implementation.
+Builds on the MVP described in `CLAUDE.md`. This spec brought several former
+"out of scope for MVP" items into scope (multiple enemy types, tower upgrades, multiple
+maps); `CLAUDE.md` was updated alongside the implementation and is the day-to-day
+reference. This file keeps the **why** and the original numbers. Sections 1–5 are the
+agreed design. **Implementation notes** explains how it was built and where the code
+departs from the design. Read it before changing any of these features.
 
 All numbers below are **starting values** for playtesting. They live in
-`src/config.ts` as named constants / tables, never inline.
+`src/config.ts` (scalars) and `src/data/*.ts` (tables), never inline.
 
 ---
 
@@ -122,38 +125,87 @@ Each tier has a distinct look (color / size) so the mix is readable.
 
 ---
 
-## Code impact
+## Implementation notes
 
-New:
-- `scenes/MapSelectScene.ts`
-- `data/maps.ts` (replaces `data/path.ts`)
-- `data/towerLevels.ts`, `data/enemyTiers.ts`: level / tier tables (or kept in
-  `config.ts`; either way no numbers inline in entities/systems)
-- `systems/GameClock.ts`: speed multiplier + fixed-step accumulator (plain TS)
-- `systems/WaveComposer.ts` (or an extension of `WaveManager`): tier mix and boss
-  waves (plain TS)
-- UI: tower panel (upgrade / sell), speed buttons, repair button
+### Where things live
 
-Changed:
-- `WaveManager`: per-wave spawn queue of `{ tier | boss }` instead of a single stat block
-- `Enemy`: built from tier / boss stats, carries its own reward
-- `Tower`: level, stats from level table, upgrade(), total invested
-- `Economy`: unchanged API; used for upgrade / sell / repair
-- `ScoreManager.computeFinal`: takes the map multiplier
-- `Shelter`: `repair(amount)`
-- `GameScene`: map id from scene data, fixed-step loop, tower selection
-- `UIScene`, `GameOverScene`: new controls and score line
-- `CLAUDE.md`, `README.md`: design sections, roadmap, controls
+| Concern | Code | Tests |
+|---|---|---|
+| Map definitions, `getMap`, `shelterTile` | `src/data/maps.ts` | `tests/maps.test.ts` |
+| Map picker | `src/scenes/MapSelectScene.ts` (also exports `GameSceneData { mapId }`) | — |
+| Speed + fixed step | `src/systems/GameClock.ts` | `tests/GameClock.test.ts` |
+| Tower level table | `src/data/towerLevels.ts` (`TOWER_LEVELS`, `TOWER_PLACE_COST`) | — |
+| Upgrade gating, invested scrap, sell value | `src/systems/TowerProgress.ts` | `tests/TowerProgress.test.ts` |
+| Enemy tier table | `src/data/enemyTiers.ts` (`ENEMY_TIERS`, `TierId`, `EnemyKind`) | — |
+| Tier mix, scaling, boss waves | `src/systems/WaveComposer.ts` (pure functions) | `tests/WaveComposer.test.ts` |
+| Spawn queue, wave phases | `src/systems/WaveManager.ts` | `tests/WaveManager.test.ts` |
+| Shelter HP, repair, repair cost | `src/systems/ShelterHealth.ts` | `tests/ShelterHealth.test.ts` |
+| Score with map multiplier | `src/systems/ScoreManager.ts` | `tests/ScoreManager.test.ts` |
+| Tile release on sell | `MapGrid.release()` | `tests/MapGrid.test.ts` |
+| HUD, speed/repair buttons, tower panel | `src/scenes/UIScene.ts` | — |
+| Selection, upgrade/sell/repair actions, step loop | `src/scenes/GameScene.ts` | — |
 
-## Tests (Vitest)
+### How it's wired
 
-- `GameClock`: step count per frame at each speed, delta cap, leftover accumulation.
-- Wave composition: active tiers by wave, even split + remainder, ascending order,
-  boss on every 10th wave with half escorts and boss last.
-- Tower levels: upgrade gating by wave and cost, stats per level, sell refund.
-- Score: map multiplier applied, rounding.
-- Shelter repair: clamp at max, cost scaling, blocked when full / unaffordable.
-- Maps: every map's waypoints are valid (orthogonal, in-bounds shelter).
+- **Scene flow:** `BootScene → MapSelectScene → GameScene (+ UIScene) → GameOverScene`.
+  `GameScene.init({ mapId })` rebuilds all state, so a retry is just
+  `scene.start('GameScene', { mapId })`. `GameOverData` carries the `MapDefinition`
+  so the retry button knows which map to replay.
+- **Entities wrap systems.** `Tower` owns a `TowerProgress`, and `Shelter` owns a
+  `ShelterHealth`. The Phaser classes only add sprites, tints and flashes, so every
+  rule in sections 3 and 5 can be unit-tested without Phaser.
+- **Enemies are data-driven.** `WaveManager.update()` returns `EnemySpec[]`
+  (`kind, hp, speed, damage, reward`), already scaled for the wave by
+  `WaveComposer`. `Enemy` just applies a spec and picks its texture from
+  `ENEMY_TEXTURES[kind]`. The kill reward travels on the enemy.
+- **Fixed-step loop.** `GameScene.update()` asks `GameClock.advance(delta)` how many
+  steps to run, then calls `step(SIM_STEP_MS)` that many times. It stops early once the
+  game is over. `Enemy.render()` and `Projectile.render()` sync sprites once per frame,
+  after all the steps. Positions live in plain fields, not on the sprite.
+- **UI reads, GameScene acts.** `UIScene` polls `GameScene` each frame
+  (`selectedTower`, `clock`, `waves`, `economy`, `shelter`) and calls
+  `upgradeSelected()` / `sellSelected()` / `repairShelter()`. The "why disabled" text
+  comes from `TowerProgress.upgradeBlocker()` and `ShelterHealth.repairBlocker()`.
+- **Click routing.** Phaser's `globalTopOnly` (default) makes an interactive object in
+  `UIScene` swallow the pointer before `GameScene` sees it. The HUD background and the
+  panel background are interactive for that reason. A hidden panel doesn't block,
+  because Phaser skips children of invisible containers.
+
+### Deviations from the design above
+
+- **`HUD_ROWS` is 2, not 1.** The speed buttons and the repair button didn't fit on a
+  single 40 px line. Line 1 shows stats and the wave, line 2 shows speed, repair and
+  "Next wave". Paths must stay at row ≥ 2, and `tests/maps.test.ts` enforces this.
+- **Crossroads is the old MVP path, shifted.** Its lower legs moved down one row
+  (rows 12/13 → 13/14) so it clearly stays the longest map. Path lengths in tiles:
+  Crossroads ≈ 56, Serpent 33, Gauntlet 23. A test checks that harder maps have
+  strictly shorter paths.
+- **The map name isn't shown in the HUD.** Line 1 would overflow once scrap and kills
+  have more digits. The map is shown on map select and on game over.
+- **Unlock waves compare against `waves.wave` literally.** During the first countdown
+  that's 0, so Lv2 (unlock wave 1) stays locked until wave 1 starts. Change it to
+  `Math.max(1, wave)` in `TowerProgress.upgradeBlocker` if that feels bad in play.
+- **The repair cost uses the current wave (`waves.wave`).** It's 20 scrap during the
+  first countdown.
+- **Game over has no "click anywhere".** The MVP restarted on any click. There are now
+  two buttons, so only the buttons and SPACE act.
+- **Enemy HP bars scale with the sprite width,** so the boss bar is wider.
+- **`GameClock` adds a 1e-9 epsilon** when turning time into steps.
+  `SIM_STEP_MS = 1000/60` isn't exact in floating point, so whole multiples could come
+  out one step short and slip to the next frame.
+- **Removed config constants:** `TOWER_COST/DAMAGE/RANGE/FIRE_COOLDOWN_MS`,
+  `ENEMY_BASE_HP/SPEED`, `ENEMY_CONTACT_DAMAGE` and `ENEMY_KILL_REWARD` were replaced by
+  the data tables. `WAVE_HP_SCALE_PER_WAVE` went from 0.25 to 0.1, as specified.
+
+### Verification status
+
+- Covered by unit tests: everything listed in the table above, 44 tests in total.
+- Played in a headless browser: map select, placement, the tower panel (including the
+  "Not enough scrap" and "Unlocks at wave 5" reasons), upgrading Lv1 → Lv2, selling,
+  x10/x50, game over with the multiplier line, and Change map.
+- **Not yet seen in play:** a boss wave, tiers T2–T5 on screen, and repair from a
+  damaged shelter. All three are unit-tested, but they still need a manual playtest.
+  The balance numbers are also still untested.
 
 ## Still out of scope
 
