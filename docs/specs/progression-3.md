@@ -1,4 +1,4 @@
-# Spec: Progression 3 (speeds, best score, shelter upgrades, water, fire, ice, max upgrade)
+# Spec: Progression 3 (speeds, best score, shelter upgrades, new tiles, max upgrade, late-game enemies)
 
 Status: **draft** (2026-09-23). Not implemented yet. The choices made while drafting are
 listed in [Decisions](#decisions).
@@ -18,6 +18,8 @@ Goals:
 7. **Ice tiles:** they speed enemies up, but a kill on ice is worth much more score.
 8. **Max upgrade on `U`:** upgrade a tower to the highest level the current wave and
    scrap allow, in one keystroke.
+9. **Late-game variety:** new special enemies, new boss types and wave themes, so
+   waves 150 to 250+ keep changing instead of only getting bigger.
 
 As before, every number below is a **starting value** for playtesting. Numbers live in
 `src/config.ts` (scalars) and `src/data/*.ts` (tables), never inline.
@@ -464,6 +466,164 @@ multiplier, a higher edit cost, or an unlock wave.
   invested total unchanged vs. step by step, sell value) and `ShelterHealth` (HP
   added over several levels).
 
+## 10. Late-game enemies and bosses
+
+### 10.1 The problem
+
+After wave ~30 nothing new happens. T8 is the last tier (wave 26), the last special
+arrives at wave 12, and there's one boss. Every wave after that is the same mix with
+more HP. Water (150), fire (250) and the x500 speed make waves 150–250+ a real target,
+so they need their own content. The goal: **every 10–20 waves between 150 and 260,
+something new shows up**, and each new thing asks the player to use a different tool.
+
+Variety comes from **traits, not bigger numbers**. No new stat tiers (see
+[Decisions](#decisions) #20).
+
+### 10.2 New special enemies
+
+Same rules as today's specials: stats scale per wave (`scaledHp`, `scaledSpeed`,
+reward `+ wave × ENEMY_KILL_REWARD_PER_WAVE`), they never retire, and they're
+interleaved through the wave.
+
+| Special | Base HP | Base speed | Contact dmg | Reward | Appears from | Trait | Counters |
+|---|---|---|---|---|---|---|---|
+| Swimmer    | 300  | 60 | 30 | 60  | 160 | **Not slowed by gravel or water** | Slow-terrain mazes |
+| Healer     | 500  | 45 | 20 | 80  | 180 | **Heal aura:** other non-boss enemies within 80 px regain 3 % of their max HP per second | Chip damage (fire, weak turrets) |
+| Jammer     | 600  | 50 | 30 | 90  | 200 | **Jam aura:** towers within 100 px fire at half rate (cooldown × 2) | Dense tower clusters |
+| Burrower   | 800  | 55 | 40 | 100 | 210 | **Burrows:** 3 s on the surface, 2 s underground, repeating. Underground it can't be targeted, and projectiles already flying at it are lost. Fire still burns it | Pure turret DPS |
+| Carrier    | 1500 | 40 | 60 | 150 | 230 | **Drops minions while walking:** every 4 s it spawns 2 T1-based children (like splitter children), at most 5 times | Killing everything at the end of the route |
+| Salamander | 1000 | 60 | 50 | 120 | 260 | **Fireproof:** takes no fire damage | Fire strips (unlocked at 250) |
+
+- Looks, readable at a glance: swimmer = streamlined with a fin, blue; healer =
+  white with a green cross; jammer = antenna with pulsing rings; burrower = drill
+  nose, drawn as a faint dirt mound while underground; carrier = large with pods on
+  its back; salamander = red and long, with a tail.
+- Aura ranges are shown as a faint circle around the enemy, so the player can see
+  what's healed and which towers are jammed. Jammed towers get a grey tint.
+- The heal aura doesn't heal the healer itself or bosses. Several healers healing
+  each other, or one boss, would make fights that can't be won.
+- A burrower that's underground on an ice tile when it dies (to fire) still counts
+  as an ice kill. Every rule looks at the tile under the enemy, not at how it died.
+
+### 10.3 Special share with nine specials
+
+Each special takes `ceil(count × SPECIAL_SHARE)` (10 %) today. With nine specials that
+would be 90 % of the wave, leaving almost no tiers.
+
+- New `SPECIAL_MAX_TOTAL_SHARE = 0.5`. Each active special takes
+  `ceil(count × min(SPECIAL_SHARE, SPECIAL_MAX_TOTAL_SHARE / activeSpecials))`.
+  Up to five specials nothing changes (5 × 10 % = 50 %). Past that, they share half
+  the wave evenly: at wave 260 each of the nine takes about 5.6 %.
+- The existing specials never retire. A wave-260 mix of runners, armored, splitters
+  and the new ones is the point.
+
+### 10.4 Boss types
+
+Bosses move into a table, `src/data/bosses.ts` (`BOSSES`), like tiers and specials.
+The boss stays built from the strongest active tier's HP and T1's speed. What changes
+per boss is the multiplier, the damage, the reward and one trait.
+
+| Boss | HP × | Speed × | Contact dmg | Reward | Appears from | Trait |
+|---|---|---|---|---|---|---|
+| Brute (today's boss) | 20 | 0.5  | 50  | 200 | 10  | None |
+| Hive Queen           | 12 | 0.5  | 60  | 300 | 150 | **Spawns escorts:** every 5 s, 4 enemies of the strongest active tier at 30 % HP, at most 8 times |
+| Juggernaut           | 25 | 0.35 | 100 | 350 | 170 | **Heavy armor 150:** a Lv8 hit deals 110, Lv7 deals 20, Lv6 and below deal 1. Fire ignores armor |
+| Warlord              | 15 | 0.6  | 70  | 300 | 190 | **War aura:** other enemies within 120 px move ×1.3 faster and take ×0.7 damage |
+| Leviathan            | 18 | 0.7  | 80  | 300 | 220 | **Not slowed by gravel or water** |
+| Phoenix              | 12 | 0.6  | 80  | 400 | 250 | **Fireproof, revives once:** 3 s after dying it rises where it fell with 50 % HP |
+
+- `BOSS_HP_MULTIPLIER`, `BOSS_SPEED_MULTIPLIER`, `BOSS_CONTACT_DAMAGE` and
+  `BOSS_REWARD` move into the Brute's row.
+- **Boss rewards scale with the wave:** `reward + wave × BOSS_REWARD_PER_WAVE` (5).
+  Today a boss is worth a flat 200, while a wave-200 T8 is already worth 400.
+- **Rotation:** a boss's first appearance is its **debut**, on the boss wave equal to
+  its `appearsFrom`. On other boss waves, the boss is
+  `activeBosses[(wave / BOSS_WAVE_INTERVAL) % activeBosses.length]`. It's
+  deterministic, so tests and players can both predict it, and the Brute stays in
+  the rotation for good.
+- **Boss pairs:** from `BOSS_PAIR_FROM_WAVE = 200`, every boss wave has **two
+  different bosses**: the rotation's boss and the next one in the table order. Both
+  spawn at the end of the queue, one spawn interval apart. The escort count is
+  unchanged.
+- The HUD announces the boss by name during the breather: `BOSS wave: Juggernaut`,
+  or `BOSS wave: Warlord + Leviathan`.
+- Looks: each boss gets its own silhouette at boss scale (`enemy-boss-<id>`). The
+  Brute keeps today's look.
+
+### 10.5 Wave themes (from wave 200)
+
+Between bosses, waves get a **theme** that changes their shape, not just their
+numbers. A new table, `src/data/waveThemes.ts`:
+
+| Theme | Count × | HP × | Speed × | Specials | Reward × |
+|---|---|---|---|---|---|
+| Normal | 1   | 1    | 1   | Usual share | 1   |
+| Swarm  | 2   | 0.5  | 1   | Usual share | 0.5 |
+| Tank   | 0.5 | 2    | 0.8 | Usual share | 2   |
+| Rush   | 1   | 0.75 | 1.3 | Usual share | 1   |
+| Elite  | 0.5 | 1    | 1   | **Specials only** | 2   |
+
+- Non-boss waves from `WAVE_THEMES_FROM_WAVE = 201` take
+  `WAVE_THEMES[wave % WAVE_THEMES.length]` (201 swarm, 202 tank, 203 rush,
+  204 elite, 205 normal…). Boss waves keep the normal composition.
+- The reward multiplier keeps a wave's total scrap about the same whatever its theme.
+- **Rush's ×1.3 goes past `WAVE_SPEED_MAX_MULTIPLIER`** on purpose. It's the one
+  place where speed breaks the cap, and it only lasts one wave.
+- Swarm waves halve the spawn interval, so the wave takes as long as a normal one.
+- The HUD shows the theme during the breather: `Wave 203: Rush`.
+
+### 10.6 First-appearance intro
+
+- The first time a new special, boss or theme appears in a game, the status line
+  shows a one-line intro: `New: Healer · heals nearby enemies`. It's the same
+  message slot as refused actions, and a plain in-game flag (no persistence).
+- The speed isn't changed, but with the §4 rule the player tends to be at x1 by then
+  anyway (the first leak drops the speed).
+
+### 10.7 Traits, generically
+
+As today, `Enemy` applies traits from optional `EnemySpec` fields, with no
+`if (kind === …)`:
+
+- `ignoresGravel` becomes `slowImmune: TileType[]`: runner `['gravel']`, swimmer
+  and leviathan `['gravel', 'water']`. It's read by
+  `EnemyTraits.terrainSpeedMultiplier`.
+- New: `fireproof`, `healAura { radius, ratioPerSec }`, `jamAura { radius,
+  cooldownMultiplier }`, `warAura { radius, speedMultiplier, damageTakenMultiplier }`,
+  `burrow { surfaceMs, undergroundMs }`, `spawner { child, everyMs, count, maxTimes }`
+  (carrier and Hive Queen share it), `revive { hpRatio, delayMs }`.
+- **Auras are updated every `AURA_TICK_MS` (250 ms of game time), not every step.**
+  At wave 250 there are ~500 enemies and ~30 aura carriers. Checking every pair on
+  every step, 600 steps per frame at x500, would be ~9 M distance checks a frame.
+  Every 250 ms it's 15 times fewer, and nobody can see the difference.
+- Towers skip burrowed enemies when picking a target. A projectile whose target is
+  underground when it arrives is removed without dealing damage.
+- **Spawned minions** (carrier, Hive Queen) start where the spawner stands, heading to
+  its next tile, like splitter children. They're outside the spawn queue, so
+  `WaveManager` already waits for them. The `maxTimes` cap guarantees the wave ends.
+- **Revive:** a dead phoenix stays in the enemy list as a dormant, untargetable,
+  non-moving ember until it rises, so `WaveManager` doesn't call the wave cleared in
+  between. It gives its kill (scrap, score, ice bonus) only on its final death.
+
+### 10.8 Structure
+
+- `src/data/specialEnemies.ts`: six new rows. `SpecialId` grows.
+- `src/data/bosses.ts` (new): `BOSSES`, `BossId`. `EnemyKind` becomes
+  `TierId | SpecialId | BossId`.
+- `src/data/waveThemes.ts` (new): `WAVE_THEMES`.
+- `WaveComposer`: `specialCounts` with the total cap, `activeBosses`, `bossesForWave`
+  (debut, rotation, pairs), `themeForWave`, and themed composition. All pure and
+  unit-tested.
+- New `src/systems/Auras.ts`: given enemy and tower positions, returns who's healed,
+  jammed and buffed. Pure, unit-tested (range, no self-heal, no boss heal, stacking:
+  auras of the same kind don't stack, the strongest one applies).
+- `EnemyTraits`: `slowImmune`, fireproof in `terrainDamage`, damage taken under the
+  war aura. `src/systems/BurrowCycle.ts` and `SpawnerTimer.ts` for the two timed
+  traits, unit-tested.
+- `config.ts`: `SPECIAL_MAX_TOTAL_SHARE`, `BOSS_REWARD_PER_WAVE`,
+  `BOSS_PAIR_FROM_WAVE`, `WAVE_THEMES_FROM_WAVE`, `AURA_TICK_MS`. The per-trait numbers
+  (radius, ratios, timings) live in the data rows.
+
 ## Implementation order
 
 Each step ships on its own and keeps the game playable:
@@ -481,7 +641,12 @@ Each step ships on its own and keeps the game playable:
 5. **Ice**: table row, `ScoreManager` ice kills, the breakdown line, popup, texture.
    Before best score, so the best score is recorded with the final formula.
 6. **Fire**: table row, `terrainDamage`, `Enemy.burn`, tint, texture.
-7. **Best score**: `BestScore`, cookie adapter, game over and map select display.
+7. **Late-game enemies**: `slowImmune` refactor and the special share cap first,
+   then specials in wave order (swimmer, healer + `Auras`, jammer, burrower, carrier,
+   salamander), then the boss table with rotation, pairs and the new bosses, then
+   wave themes, then the first-appearance intros. Fire comes before this step, since
+   the salamander and the phoenix need it.
+8. **Best score**: `BestScore`, cookie adapter, game over and map select display.
 
 ## Test plan
 
@@ -496,7 +661,11 @@ Each step ships on its own and keeps the game playable:
   path route).
 - Unit (new): `tileTypes` table sanity (every `TileType` has a row, unique edit keys,
   ground is the only non-walkable type, speed multipliers > 0),
-  `EnemyTraits.terrainDamage` (wave scaling, 0 off fire), `UpgradePlan` (§9.4).
+  `EnemyTraits.terrainDamage` (wave scaling, 0 off fire, fireproof), `UpgradePlan`
+  (§9.4), `Auras`, `BurrowCycle`, `SpawnerTimer`. `WaveComposer`: special share cap,
+  boss debut, rotation and pairs, themes (count, HP, reward, specials-only elite),
+  unchanged composition before wave 201. Data sanity for `bosses.ts` and
+  `waveThemes.ts` (Brute's row matches today's boss numbers).
 - Unit (new): `shelterLevels` table sanity (max HP and costs strictly increasing, Lv1
   free). `BestScore`: parsing valid, malformed, negative, non-integer and
   unknown-map values; formatting; "new best" is strictly higher; first score is a new
@@ -512,7 +681,11 @@ Each step ships on its own and keeps the game playable:
   button, `U` on the shelter, `S` from anywhere. Fire at wave 250:
   enemies and armored enemies burn, fire kills pay scrap, a splitter's children
   burn. Ice: enemies speed up and reroute onto it, the `×5` popup, the ice kills line
-  on game over. The tile panel with six options fits.
+  on game over. The tile panel with six options fits. Late game (reach it at x500):
+  each new special and boss on screen with a readable look, the aura circles and
+  jammed tint, a burrower dodging projectiles, a phoenix reviving, a boss pair at
+  wave 200, one wave of each theme, the intro lines, and x500 staying responsive at
+  wave 250 with a swarm wave.
 
 ## CLAUDE.md changes (at implementation time)
 
@@ -524,6 +697,9 @@ Each step ships on its own and keeps the game playable:
   fire, ice), unlock waves and the `locked` refusal. Fire damage, and routing that
   looks at speed only. Runner: gravel only.
 - Scoring: the formula with ice kills.
+- Entities / Enemy: nine specials, six boss types, wave themes, the new traits and
+  the aura tick. Replace "The boss has no trait" with the boss table.
+- Wave & Difficulty Scaling: the special share cap, boss rotation and pairs, themes.
 - Entities / Tower: `U` and the panel's Max button upgrade to the highest level the
   wave and scrap allow.
 - Out of scope: replace "Persistent anything" with "Persistence beyond the best-score
@@ -555,3 +731,9 @@ Defaults picked while drafting (2026-09-23), open to change before implementatio
 | 16 | `U` vs. the shelter upgrade key | **`U` = max upgrade of what's under the cursor; shelter from anywhere moves to `S`** | Keep `U` for the shelter and use another key for max |
 | 17 | Max upgrade when a level is too expensive | **Stop there, never skip levels** | Do nothing unless the top unlocked level is affordable |
 | 18 | Mouse max upgrade | **A Max button in the tower panel** only | Also a HUD button for the shelter. Shift-click Upgrade |
+| 19 | Late-game variety | **New specials, boss types and wave themes** | Only more of today's enemies. Random "elite" affixes |
+| 20 | New stat tiers (T9, T10)? | **No.** They'd add HP, not gameplay, and the boss HP would jump with them | T9 at 150 and T10 at 200 |
+| 21 | Nine specials vs. the 10 % share | **Cap the total at 50 %**, split evenly | Retire the early specials. Keep 10 % each (90 % specials) |
+| 22 | Healer on bosses | **Doesn't heal bosses or itself** | Heals everyone |
+| 23 | Boss choice | **Debut, then a fixed rotation; pairs from wave 200** | Random boss. Always the newest boss |
+| 24 | Aura update rate | **Every 250 ms of game time** | Every step |
