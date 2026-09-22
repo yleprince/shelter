@@ -11,8 +11,9 @@ export const STATUS_ROWS = 1;
 
 export const STARTING_CURRENCY = 100;
 
-export const SHELTER_MAX_HP = 100;
-export const SHELTER_REPAIR_AMOUNT = 10;
+// Shelter max HP and upgrade costs per level live in data/shelterLevels.ts.
+// Share of max HP each repair restores, so repairs keep mattering on an upgraded shelter.
+export const SHELTER_REPAIR_RATIO = 0.1;
 export const SHELTER_REPAIR_BASE_COST = 20;
 export const SHELTER_REPAIR_COST_PER_WAVE = 2;
 

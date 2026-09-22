@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { TILE_SIZE } from '../config';
 import type { EnemyKind } from '../data/enemyTiers';
-import { ENEMY_TEXTURES, TEXTURES, TOWER_GUN_TEXTURES } from '../data/textures';
+import { ENEMY_TEXTURES, SHELTER_TEXTURES, TEXTURES, TOWER_GUN_TEXTURES } from '../data/textures';
 
 type EnemyShape = 'round' | 'horned' | 'ringed' | 'boss' | 'elongated' | 'plated' | 'lobed';
 
@@ -164,15 +164,43 @@ export class BootScene extends Phaser.Scene {
     });
   }
 
+  // Each level adds one visible feature on top of the last and grows a little, so the
+  // upgrade reads at a glance; Lv5 spills a few pixels over neighbouring tiles.
   private makeShelter(): void {
-    const size = TILE_SIZE;
-    this.draw(TEXTURES.shelter, size, size, (g) => {
-      g.fillStyle(0x222222).fillRect(0, 0, size, size);
-      g.fillStyle(0x6b5b45).fillRect(2, 8, size - 4, size - 10);
-      g.fillStyle(0x4d4032).fillTriangle(0, 10, size / 2, 0, size, 10);
-      g.fillStyle(0x1a1a1a).fillRect(size / 2 - 6, size - 16, 12, 14);
-      g.fillStyle(0xc9a227).fillRect(6, 14, 6, 6).fillRect(size - 12, 14, 6, 6);
+    SHELTER_TEXTURES.forEach((key, i) => {
+      const size = TILE_SIZE + i * SHELTER_GROWTH_PER_LEVEL_PX;
+      this.draw(key, size, size, (g) => paintShelter(g, size, i + 1));
     });
+  }
+}
+
+const SHELTER_GROWTH_PER_LEVEL_PX = 3;
+
+function paintShelter(g: Phaser.GameObjects.Graphics, size: number, level: number): void {
+  const roofHeight = Math.round(size / 4);
+  const roofColor = level >= 3 ? 0x7a7f84 : 0x4d4032;
+  g.fillStyle(0x222222).fillRect(0, 0, size, size);
+  g.fillStyle(0x6b5b45).fillRect(2, roofHeight - 2, size - 4, size - roofHeight);
+  g.fillStyle(roofColor).fillTriangle(0, roofHeight, size / 2, 0, size, roofHeight);
+  if (level >= 3) {
+    g.fillStyle(0x3a3a34).fillRect(size * 0.7, 2, 5, roofHeight - 2);
+    g.fillStyle(0xd0d4d8).fillRect(size / 2 - 1, roofHeight / 2, 2, 2);
+  }
+  if (level >= 4) {
+    g.fillStyle(0x4a4a44).fillRect(0, roofHeight, 5, size - roofHeight).fillRect(size - 5, roofHeight, 5, size - roofHeight);
+  }
+  if (level >= 5) {
+    g.fillStyle(0xd94c3d).fillCircle(size * 0.2, roofHeight - 3, 2).fillCircle(size * 0.8, roofHeight - 3, 2);
+  }
+  const windowColor = level >= 2 ? 0xffd166 : 0xc9a227;
+  const windowY = roofHeight + 4;
+  g.fillStyle(windowColor).fillRect(8, windowY, 6, 6).fillRect(size - 14, windowY, 6, 6);
+  g.fillStyle(level >= 5 ? 0x5a5e62 : 0x1a1a1a).fillRect(size / 2 - 6, size - 16, 12, 14);
+  if (level >= 2) {
+    g.fillStyle(0xb8a67a);
+    for (let x = 3; x + 7 <= size - 3; x += 8) {
+      if (x + 7 < size / 2 - 6 || x > size / 2 + 6) g.fillEllipse(x + 3.5, size - 4, 8, 5);
+    }
   }
 }
 

@@ -1,9 +1,10 @@
 import { TILE_TYPES } from '../data/tileTypes';
+import type { ShelterLevel } from '../data/shelterLevels';
 import type { TowerLevel } from '../data/towerLevels';
 import type { TileType } from '../systems/MapGrid';
 import type { RepairBlocker } from '../systems/ShelterHealth';
 import type { EditBlocker } from '../systems/TileEditor';
-import type { UpgradeBlocker } from '../systems/TowerProgress';
+import type { UpgradeBlocker } from '../systems/UpgradePlan';
 
 export function tileTypeDescription(type: TileType): string {
   const { name, walkable, speedMultiplier } = TILE_TYPES[type];
@@ -40,6 +41,17 @@ export function upgradeBlockerText(blocker: UpgradeBlocker, next: TowerLevel | u
       return 'Already at max level';
     case 'locked':
       return next ? `Unlocks at wave ${next.unlockWave}` : '';
+    case 'too-expensive':
+      return 'Not enough scrap';
+  }
+}
+
+export function shelterUpgradeBlockerText(blocker: UpgradeBlocker, next: ShelterLevel | undefined): string {
+  switch (blocker) {
+    case 'max-level':
+      return 'Shelter at max level';
+    case 'locked':
+      return next ? `Shelter Lv${next.level} unlocks at wave ${next.unlockWave}` : '';
     case 'too-expensive':
       return 'Not enough scrap';
   }

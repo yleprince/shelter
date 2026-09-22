@@ -37,9 +37,13 @@ export class Tower {
 
   upgrade(wave: number, economy: Economy): boolean {
     if (!this.progress.upgrade(wave, economy)) return false;
-    const levelIndex = this.progress.level - 1;
-    this.gun.setTexture(TOWER_GUN_TEXTURES[levelIndex]);
-    this.base.setScale(1 + levelIndex * BASE_SCALE_PER_LEVEL).setTint(BASE_TINTS[levelIndex]);
+    this.refreshLook();
+    return true;
+  }
+
+  maxUpgrade(wave: number, economy: Economy): boolean {
+    if (!this.progress.maxUpgrade(wave, economy)) return false;
+    this.refreshLook();
     return true;
   }
 
@@ -56,6 +60,12 @@ export class Tower {
   destroy(): void {
     this.base.destroy();
     this.gun.destroy();
+  }
+
+  private refreshLook(): void {
+    const levelIndex = this.progress.level - 1;
+    this.gun.setTexture(TOWER_GUN_TEXTURES[levelIndex]);
+    this.base.setScale(1 + levelIndex * BASE_SCALE_PER_LEVEL).setTint(BASE_TINTS[levelIndex]);
   }
 
   private findTarget(enemies: readonly Enemy[]): Enemy | undefined {

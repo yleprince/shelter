@@ -76,7 +76,8 @@ shelter/
       KeySequence.ts       # vim-style key sequences (gg, dd, r…) with timeout → actions
       TileCursor.ts        # keyboard cursor: position, clamping, motions, tower jumps
       TowerProgress.ts     # tower level, upgrade gating, invested scrap, sell value
-      ShelterHealth.ts     # shelter HP, damage, repair + repair cost
+      ShelterHealth.ts     # shelter level, HP, damage, repair + repair cost, upgrades
+      UpgradePlan.ts       # next-level blocker and max-upgrade plan over any level table
       Economy.ts           # currency balance, earn/spend
       ScoreManager.ts       # tracks survival time, kills, computes final score breakdown
       MapGrid.ts           # tile-type grid, occupied tiles, tile↔world
@@ -86,6 +87,7 @@ shelter/
     data/
       maps.ts             # the 3 map definitions (initial path, difficulty, score multiplier)
       towerLevels.ts       # turret Lv1–Lv8 stat/cost/unlock table
+      shelterLevels.ts      # shelter Lv1–Lv5 max HP/cost/unlock table
       enemyTiers.ts        # enemy T1–T8 base stats and wave ranges
       specialEnemies.ts     # runner / armored / splitter stats and traits
       keybindings.ts        # every key binding, per scene (source of truth for help too)
@@ -108,10 +110,12 @@ only add the Phaser sprites on top.
 ## Core Game Design
 
 ### Entities
-- **Shelter**: fixed position at the end of the path. Has HP (default `100`). Any
-  enemy that reaches it deals its damage value to the shelter's HP and is removed.
-  Game over when shelter HP reaches `0`. The player can repair it from the HUD at any
-  time: `+SHELTER_REPAIR_AMOUNT` HP (clamped to max) for
+- **Shelter**: fixed position at the end of the path, with levels Lv1–Lv5
+  (`data/shelterLevels.ts`, 100 → 450 max HP, gated by wave and cost, no refunds). An
+  upgrade adds the max HP gained to current HP rather than healing fully, and swaps
+  the texture. Any enemy that reaches it deals its damage value to the shelter's HP and
+  is removed. Game over when shelter HP reaches `0`. The player can repair it from the
+  HUD at any time: `round(maxHp × SHELTER_REPAIR_RATIO)` HP (clamped to max) for
   `SHELTER_REPAIR_BASE_COST + wave * SHELTER_REPAIR_COST_PER_WAVE` scrap.
 - **Enemy**: eight stat tiers (T1–T8, `data/enemyTiers.ts`), three specials
   (`data/specialEnemies.ts`) and a boss, each with its own look. Walks the current
@@ -129,6 +133,10 @@ only add the Phaser sprites on top.
   at Lv1 on valid non-path tiles. Auto-targets the nearest enemy within range and fires
   on a cooldown. Clicking it opens a panel to upgrade in place (gated by wave and cost)
   or sell for `TOWER_SELL_REFUND_RATIO` × total invested, freeing the tile.
+- **Upgrades** (towers and shelter share `UpgradePlan`): `u` takes one level of what's
+  under the cursor, `U` (or the tower panel's Max button) takes levels in order while
+  each is unlocked and the running total is affordable, never skipping one, charged
+  once. `S` upgrades the shelter one level from anywhere, as does the HUD button.
 - **Projectile**: spawned by a tower on fire, travels toward its target, deals damage
   on hit.
 
@@ -197,8 +205,8 @@ spawn pacing), composed by `WaveComposer`:
   once the previous wave is fully cleared. The HUD's "Next wave" button skips it.
 
 All the constants above (increments, scale factors, starting currency, boss, repair,
-refund, speed, special, tile-edit and key-timeout settings, shelter HP) belong in
-`src/config.ts` as named constants, and the per-level / per-tier / per-special /
+refund, speed, special, tile-edit and key-timeout settings) belong in
+`src/config.ts` as named constants, and the per-level (tower and shelter) / per-tier / per-special /
 per-map / per-tile-type / key-binding tables in `src/data/`. Never hardcode them
 inline in entities/systems, so balancing stays a data-only change.
 
@@ -217,6 +225,10 @@ inline in entities/systems, so balancing stays a data-only change.
 - `advance()` never returns more than `MAX_SIM_STEPS_PER_FRAME` steps; time over the
   cap is dropped, not banked, so on a slow machine x500 just runs below x500 instead of
   locking up the tab.
+- Any shelter damage above x1 drops the speed to x1 (`GameClock.dropToBaseSpeed()`,
+  which also clears the accumulator) and `GameScene` discards the rest of that frame's
+  steps, so fast-forward never hides a leak. The pause state is kept; the status line
+  says so.
 - Survival time counts simulated time, so the score doesn't depend on speed.
 
 ### Scoring

@@ -34,6 +34,15 @@ export class GameClock {
     if (index >= 0 && index < GAME_SPEEDS.length) this.speedIndex = index;
   }
 
+  // Clears the accumulator too: time already banked at the old speed would otherwise keep
+  // running at x500 after the drop.
+  dropToBaseSpeed(): boolean {
+    if (this.speedIndex === 0) return false;
+    this.speedIndex = 0;
+    this.accumulatorMs = 0;
+    return true;
+  }
+
   // Returns how many SIM_STEP_MS steps to simulate for this frame.
   advance(realDeltaMs: number): number {
     // Paused time is dropped rather than banked, so resuming never bursts steps.

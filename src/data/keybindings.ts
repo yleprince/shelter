@@ -28,6 +28,7 @@ export type GameAction =
   | 'context'
   | 'place'
   | 'upgrade'
+  | 'upgradeMax'
   | 'sell'
   | TileEditAction
   | 'pause'
@@ -36,6 +37,7 @@ export type GameAction =
   | 'speed3'
   | 'speed4'
   | 'repair'
+  | 'upgradeShelter'
   | 'nextWave'
   | 'help'
   | 'cancel';
@@ -95,7 +97,8 @@ export const GAME_BINDINGS: readonly KeyBinding<GameAction>[] = [
   game('Move', 'toShelter', seq('gs'), 'Jump to shelter'),
   game('Build', 'context', seq('Enter'), 'Place turret / open tower panel'),
   game('Build', 'place', seq('i'), 'Place turret'),
-  game('Build', 'upgrade', seq('u'), 'Upgrade tower'),
+  game('Build', 'upgrade', seq('u'), 'Upgrade tower / shelter one level'),
+  game('Build', 'upgradeMax', seq('U'), 'Upgrade to the highest level available'),
   game('Build', 'sell', seq('dd'), 'Sell tower'),
   ...TILE_TYPE_ORDER.map((type) =>
     game('Tiles', tileEditAction(type), seq(`r${TILE_TYPES[type].editKey}`), TILE_TYPES[type].editHelp),
@@ -106,6 +109,7 @@ export const GAME_BINDINGS: readonly KeyBinding<GameAction>[] = [
   game('Game', 'speed3', seq('3'), `Speed x${GAME_SPEEDS[2]}`),
   game('Game', 'speed4', seq('4'), `Speed x${GAME_SPEEDS[3]}`),
   game('Game', 'repair', seq('R'), 'Repair shelter'),
+  game('Game', 'upgradeShelter', seq('S'), 'Upgrade shelter one level'),
   game('Game', 'nextWave', seq('n'), 'Next wave now'),
   game('Game', 'help', seq('?'), 'Toggle this help'),
   game('Game', 'cancel', seq('Escape'), 'Cancel keys / close panel'),

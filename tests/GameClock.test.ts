@@ -70,3 +70,37 @@ describe('GameClock pause', () => {
     expect(clock.advance(SIM_STEP_MS)).toBe(GAME_SPEEDS[1]);
   });
 });
+
+describe('GameClock dropToBaseSpeed', () => {
+  it('returns false at x1', () => {
+    const clock = new GameClock();
+    expect(clock.dropToBaseSpeed()).toBe(false);
+    expect(clock.speed).toBe(GAME_SPEEDS[0]);
+  });
+
+  it('drops to x1 and clears the accumulator', () => {
+    const clock = new GameClock();
+    clock.setSpeedLevel(GAME_SPEEDS.length - 1);
+    clock.advance(SIM_STEP_MS / (2 * GAME_SPEEDS[GAME_SPEEDS.length - 1]));
+    expect(clock.dropToBaseSpeed()).toBe(true);
+    expect(clock.speed).toBe(GAME_SPEEDS[0]);
+    expect(clock.advance(SIM_STEP_MS * 0.6)).toBe(0);
+    expect(clock.advance(SIM_STEP_MS)).toBe(1);
+  });
+
+  it('keeps the pause state', () => {
+    const clock = new GameClock();
+    clock.setSpeedLevel(2);
+    clock.setPaused(true);
+    expect(clock.dropToBaseSpeed()).toBe(true);
+    expect(clock.paused).toBe(true);
+    expect(clock.advance(SIM_STEP_MS)).toBe(0);
+  });
+
+  it('runs at x1 on the next advance', () => {
+    const clock = new GameClock();
+    clock.setSpeedLevel(3);
+    clock.dropToBaseSpeed();
+    expect(clock.advance(SIM_STEP_MS * 3)).toBe(3);
+  });
+});

@@ -1,4 +1,5 @@
 import type { EnemyKind } from './enemyTiers';
+import { SHELTER_LEVELS } from './shelterLevels';
 import { TOWER_LEVELS } from './towerLevels';
 
 export const TEXTURES = {
@@ -8,11 +9,13 @@ export const TEXTURES = {
   water: 'tile-water',
   towerBase: 'tower-base',
   projectile: 'projectile',
-  shelter: 'shelter',
 } as const;
 
 // Indexed by tower level - 1.
 export const TOWER_GUN_TEXTURES: readonly string[] = TOWER_LEVELS.map(({ level }) => `tower-gun-${level}`);
+
+// Indexed by shelter level - 1.
+export const SHELTER_TEXTURES: readonly string[] = SHELTER_LEVELS.map(({ level }) => `shelter-lv${level}`);
 
 export const ENEMY_TEXTURES: Readonly<Record<EnemyKind, string>> = {
   T1: 'enemy-t1',

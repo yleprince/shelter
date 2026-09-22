@@ -55,4 +55,28 @@ describe('TowerProgress', () => {
     tower.upgrade(1, new Economy(1000));
     expect(tower.sellValue).toBe(Math.floor((TOWER_LEVELS[0].cost + TOWER_LEVELS[1].cost) * TOWER_SELL_REFUND_RATIO));
   });
+
+  it('max upgrades in one charge, investing the same as step by step', () => {
+    const wave = TOWER_LEVELS[4].unlockWave;
+    const stepped = new TowerProgress();
+    const steppedEconomy = new Economy(100_000);
+    while (stepped.upgrade(wave, steppedEconomy));
+
+    const maxed = new TowerProgress();
+    const economy = new Economy(100_000);
+    expect(maxed.maxUpgrade(wave, economy)).toBe(true);
+    expect(maxed.level).toBe(stepped.level);
+    expect(maxed.stats).toBe(TOWER_LEVELS[4]);
+    expect(maxed.totalInvested).toBe(stepped.totalInvested);
+    expect(maxed.sellValue).toBe(stepped.sellValue);
+    expect(economy.balance).toBe(steppedEconomy.balance);
+  });
+
+  it('max upgrade charges nothing when the next level is blocked', () => {
+    const tower = new TowerProgress();
+    const economy = new Economy(TOWER_LEVELS[1].cost - 1);
+    expect(tower.maxUpgrade(100, economy)).toBe(false);
+    expect(economy.balance).toBe(TOWER_LEVELS[1].cost - 1);
+    expect(tower.level).toBe(1);
+  });
 });

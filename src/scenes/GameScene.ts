@@ -37,7 +37,13 @@ import {
 } from '../systems/TileEditor';
 import { TileCursor } from '../systems/TileCursor';
 import { WaveManager } from '../systems/WaveManager';
-import { editBlockerText, repairBlockerText, tileTypeDescription, upgradeBlockerText } from '../ui/labels';
+import {
+  editBlockerText,
+  repairBlockerText,
+  shelterUpgradeBlockerText,
+  tileTypeDescription,
+  upgradeBlockerText,
+} from '../ui/labels';
 import type { GameOverData } from './GameOverScene';
 import type { GameSceneData } from './MapSelectScene';
 
@@ -171,7 +177,11 @@ export class GameScene extends Phaser.Scene {
     this.messageMs = Math.max(0, this.messageMs - delta);
 
     const steps = this.clock.advance(delta);
-    for (let i = 0; i < steps && !this.isOver; i++) this.step(SIM_STEP_MS);
+    // A speed drop discards the frame's remaining steps: at x500 they'd be seconds of
+    // unwatched game time, enough for the rest of a leak to reach the shelter.
+    for (let i = 0; i < steps && !this.isOver; i++) {
+      if (this.step(SIM_STEP_MS)) break;
+    }
     if (this.isOver) return;
     for (const enemy of this.enemies) enemy.render();
     for (const projectile of this.projectiles) projectile.render();
@@ -219,8 +229,21 @@ export class GameScene extends Phaser.Scene {
     else this.shelter.tryRepair(this.waves.wave, this.economy);
   }
 
+  upgradeShelter(): void {
+    const blocker = this.shelter.health.upgradeBlocker(this.waves.wave, this.economy.balance);
+    if (blocker) return this.say(shelterUpgradeBlockerText(blocker, this.shelter.health.nextLevel));
+    const { level } = this.shelter;
+    const cost = this.shelter.health.upgradeCost();
+    this.shelter.tryUpgrade(this.waves.wave, this.economy);
+    this.say(`Shelter Lv${level} → Lv${this.shelter.level} (−${cost})`);
+  }
+
   upgradeSelected(): void {
     if (this.selectedTower) this.upgradeTower(this.selectedTower);
+  }
+
+  maxUpgradeSelected(): void {
+    if (this.selectedTower) this.maxUpgradeTower(this.selectedTower);
   }
 
   sellSelected(): void {
@@ -266,7 +289,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   describeTile(tile: TileCoord): string {
-    if (sameTile(tile, this.shelterAt)) return `Shelter ${this.shelter.hp}/${this.shelter.maxHp}`;
+    if (sameTile(tile, this.shelterAt)) return `Shelter Lv${this.shelter.level} · ${this.shelter.hp}/${this.shelter.maxHp}`;
     const tower = this.towerAt(tile);
     if (tower) return `Tower Lv${tower.progress.level} · sells for ${tower.progress.sellValue}`;
     const entry = sameTile(tile, this.grid.entry) ? ' · entry' : '';
@@ -339,6 +362,11 @@ export class GameScene extends Phaser.Scene {
         return this.placeTower(tile);
       case 'upgrade':
         if (tower) return this.upgradeTower(tower);
+        if (sameTile(tile, this.shelterAt)) return this.upgradeShelter();
+        return this.say('No tower here');
+      case 'upgradeMax':
+        if (tower) return this.maxUpgradeTower(tower);
+        if (sameTile(tile, this.shelterAt)) return this.maxUpgradeShelter();
         return this.say('No tower here');
       case 'sell':
         if (tower) return this.sellTower(tower);
@@ -347,6 +375,8 @@ export class GameScene extends Phaser.Scene {
         return this.togglePause();
       case 'repair':
         return this.repairShelter();
+      case 'upgradeShelter':
+        return this.upgradeShelter();
       case 'nextWave':
         return this.nextWave();
       case 'help':
@@ -358,8 +388,10 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private step(deltaMs: number): void {
+  // Returns whether the step dropped the speed to x1.
+  private step(deltaMs: number): boolean {
     this.score.tick(deltaMs);
+    let droppedSpeed = false;
 
     for (const spec of this.waves.update(deltaMs, this.enemies.length)) {
       this.enemies.push(new Enemy(this, this.nav, spec, this.grid.tileToWorld(this.grid.leadIn), this.grid.entry));
@@ -370,6 +402,7 @@ export class GameScene extends Phaser.Scene {
       if (enemy.reachedEnd && enemy.isAlive) {
         this.shelter.takeDamage(enemy.damage);
         enemy.destroy();
+        if (this.clock.dropToBaseSpeed()) droppedSpeed = true;
       }
     }
 
@@ -392,6 +425,8 @@ export class GameScene extends Phaser.Scene {
     this.enemies = this.enemies.filter((enemy) => enemy.isAlive);
 
     if (this.shelter.isDestroyed) this.endGame();
+    if (droppedSpeed) this.say(`Shelter hit · speed back to x${this.clock.speed}`);
+    return droppedSpeed;
   }
 
   private onEnemyKilled(enemy: Enemy): void {
@@ -549,6 +584,23 @@ export class GameScene extends Phaser.Scene {
     if (blocker) return this.say(upgradeBlockerText(blocker, tower.progress.nextLevel));
     tower.upgrade(this.waves.wave, this.economy);
     if (tower === this.selectedTower) this.drawSelection();
+  }
+
+  private maxUpgradeTower(tower: Tower): void {
+    const plan = tower.progress.upgradePlan(this.waves.wave, this.economy.balance);
+    if ('blocker' in plan) return this.say(upgradeBlockerText(plan.blocker, tower.progress.nextLevel));
+    const from = tower.progress.level;
+    tower.maxUpgrade(this.waves.wave, this.economy);
+    this.say(`Tower Lv${from} → Lv${plan.targetLevel} (−${plan.cost})`);
+    if (tower === this.selectedTower) this.drawSelection();
+  }
+
+  private maxUpgradeShelter(): void {
+    const plan = this.shelter.health.upgradePlan(this.waves.wave, this.economy.balance);
+    if ('blocker' in plan) return this.say(shelterUpgradeBlockerText(plan.blocker, this.shelter.health.nextLevel));
+    const from = this.shelter.level;
+    this.shelter.maxUpgrade(this.waves.wave, this.economy);
+    this.say(`Shelter Lv${from} → Lv${plan.targetLevel} (−${plan.cost})`);
   }
 
   private sellTower(tower: Tower): void {
