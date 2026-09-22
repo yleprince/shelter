@@ -1,6 +1,6 @@
 # Spec: Progression features (maps, game speed, tower levels, enemy tiers)
 
-Status: **agreed, not yet implemented** (2026-09-22)
+Status: **implemented** (2026-09-22)
 
 Builds on the MVP described in `CLAUDE.md`. Several items listed there as "out of
 scope for MVP" (multiple enemy types, tower upgrades, multiple paths) are brought in

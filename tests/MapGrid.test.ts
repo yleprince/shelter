@@ -25,6 +25,8 @@ describe('MapGrid', () => {
     expect(g.isBuildable({ col: 8, row: 3 })).toBe(false);
     g.occupy({ col: 6, row: 6 });
     expect(g.isBuildable({ col: 6, row: 6 })).toBe(false);
+    g.release({ col: 6, row: 6 });
+    expect(g.isBuildable({ col: 6, row: 6 })).toBe(true);
   });
 
   it('rejects diagonal segments', () => {

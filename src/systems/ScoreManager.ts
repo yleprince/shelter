@@ -7,6 +7,8 @@ export interface ScoreBreakdown {
   survivalPoints: number;
   killPoints: number;
   currencyPoints: number;
+  subtotal: number;
+  mapMultiplier: number;
   total: number;
 }
 
@@ -30,10 +32,11 @@ export class ScoreManager {
     this.killCount++;
   }
 
-  computeFinal(currencyRemaining: number): ScoreBreakdown {
+  computeFinal(currencyRemaining: number, mapMultiplier: number): ScoreBreakdown {
     const survivalPoints = Math.floor(this.survivalSeconds * SURVIVAL_POINTS_PER_SEC);
     const killPoints = Math.floor(this.killCount * POINTS_PER_KILL);
     const currencyPoints = Math.floor(currencyRemaining * POINTS_PER_SAVED_CURRENCY);
+    const subtotal = survivalPoints + killPoints + currencyPoints;
     return {
       survivalSeconds: this.survivalSeconds,
       kills: this.killCount,
@@ -41,7 +44,9 @@ export class ScoreManager {
       survivalPoints,
       killPoints,
       currencyPoints,
-      total: survivalPoints + killPoints + currencyPoints,
+      subtotal,
+      mapMultiplier,
+      total: Math.floor(subtotal * mapMultiplier),
     };
   }
 }

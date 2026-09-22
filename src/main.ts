@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from './config';
 import { BootScene } from './scenes/BootScene';
+import { MapSelectScene } from './scenes/MapSelectScene';
 import { GameScene } from './scenes/GameScene';
 import { UIScene } from './scenes/UIScene';
 import { GameOverScene } from './scenes/GameOverScene';
@@ -19,5 +20,5 @@ new Phaser.Game({
   physics: {
     default: 'arcade',
   },
-  scene: [BootScene, GameScene, UIScene, GameOverScene],
+  scene: [BootScene, MapSelectScene, GameScene, UIScene, GameOverScene],
 });

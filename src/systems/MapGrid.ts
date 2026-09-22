@@ -1,4 +1,4 @@
-import type { TileCoord } from '../data/path';
+import type { TileCoord } from '../data/maps';
 
 export interface Point {
   x: number;
@@ -42,6 +42,10 @@ export class MapGrid {
 
   occupy(tile: TileCoord): void {
     this.occupiedTiles.add(key(tile));
+  }
+
+  release(tile: TileCoord): void {
+    this.occupiedTiles.delete(key(tile));
   }
 
   tileToWorld(tile: TileCoord): Point {

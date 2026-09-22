@@ -7,6 +7,8 @@ export type ProjectileState = 'flying' | 'hit' | 'expired';
 
 export class Projectile {
   private readonly sprite: Phaser.GameObjects.Image;
+  private x: number;
+  private y: number;
 
   constructor(
     scene: Phaser.Scene,
@@ -15,20 +17,26 @@ export class Projectile {
     readonly target: Enemy,
     readonly damage: number,
   ) {
+    this.x = x;
+    this.y = y;
     this.sprite = scene.add.image(x, y, TEXTURES.projectile).setDepth(DEPTH.projectile);
   }
 
   update(deltaMs: number): ProjectileState {
     // Homing: if the target already died, the shot fizzles instead of wandering the map.
     if (!this.target.isAlive) return 'expired';
-    const dx = this.target.x - this.sprite.x;
-    const dy = this.target.y - this.sprite.y;
+    const dx = this.target.x - this.x;
+    const dy = this.target.y - this.y;
     const dist = Math.hypot(dx, dy);
     const step = (PROJECTILE_SPEED * deltaMs) / 1000;
     if (dist <= Math.max(step, PROJECTILE_HIT_RADIUS)) return 'hit';
-    this.sprite.x += (dx / dist) * step;
-    this.sprite.y += (dy / dist) * step;
+    this.x += (dx / dist) * step;
+    this.y += (dy / dist) * step;
     return 'flying';
+  }
+
+  render(): void {
+    this.sprite.setPosition(this.x, this.y);
   }
 
   destroy(): void {
