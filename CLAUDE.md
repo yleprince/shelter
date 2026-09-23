@@ -31,7 +31,8 @@ stays consistent.
   towers/path tiles, a zombie/survivor pack for enemies and the shelter), recolored for
   a post-apocalyptic tone — load them in `BootScene` under the same `TEXTURES` keys and
   nothing else needs to change. No paid or unlicensed assets.
-- Deployment target: GitHub Pages, built from the Vite `dist/` output.
+- Deployment target: GitHub Pages, built from the Vite `dist/` output. A `Dockerfile`
+  also packages the same build behind nginx for self-hosting.
 
 ## Commands
 
@@ -40,6 +41,8 @@ stays consistent.
 - `npm run preview` — preview the production build locally
 - `npm run typecheck` — run `tsc --noEmit`
 - `npm test` — run the Vitest suite in `tests/` once
+- `docker compose up --build` — build the image (tests + production build in a Node
+  stage, `dist/` served by nginx using `docker/nginx.conf`) and serve it on port 8080
 
 ## Project Structure
 
@@ -49,6 +52,10 @@ shelter/
   package.json
   tsconfig.json
   vite.config.ts
+  Dockerfile           # node build stage → nginx serving dist/
+  docker-compose.yml   # serves the image on port 8080
+  docker/
+    nginx.conf
   public/
     assets/            # (empty for now) sprite sheets, audio, favicon — served as-is
   src/

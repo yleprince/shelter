@@ -86,6 +86,16 @@ npm run build
 # publish dist/ to the gh-pages branch (or your CI of choice)
 ```
 
+### Docker
+
+The image runs the tests, builds the game and serves `dist/` with nginx on port 80.
+
+```bash
+docker compose up --build -d   # then open http://localhost:8080
+# or
+docker build -t shelter . && docker run --rm -p 8080:80 shelter
+```
+
 ## Balancing
 
 Gameplay constants (starting scrap, wave scaling, boss, repair, tile edits, special
