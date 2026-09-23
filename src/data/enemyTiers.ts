@@ -1,7 +1,8 @@
+import type { BossId } from './bosses';
 import type { SpecialId } from './specialEnemies';
 
 export type TierId = 'T1' | 'T2' | 'T3' | 'T4' | 'T5' | 'T6' | 'T7' | 'T8';
-export type EnemyKind = TierId | SpecialId | 'boss';
+export type EnemyKind = TierId | SpecialId | BossId;
 
 export interface EnemyTier {
   id: TierId;

@@ -14,7 +14,9 @@ score — combining survival time, enemies killed, and resources (currency) save
 The MVP plus the progression features in `docs/specs/progression.md` (map selection,
 game speed, tower levels, enemy tiers and boss waves, selling, shelter repair) and
 `docs/specs/progression-2.md` (pause, keyboard/vim play with a help menu, tile editing,
-tiers T6–T8, special enemies, tower Lv6–Lv8) are implemented. This file describes the architecture and conventions so that further work
+tiers T6–T8, special enemies, tower Lv6–Lv8) and `docs/specs/progression-3.md` (speeds,
+best score, shelter upgrades, water/fire/ice tiles, max upgrade, late-game specials,
+boss types and wave themes) are implemented. This file describes the architecture and conventions so that further work
 stays consistent.
 
 ## Tech Stack
@@ -72,7 +74,10 @@ shelter/
       WaveManager.ts       # wave phases (breather → spawning → clearing), spawn queue
       WaveComposer.ts      # pure functions: tier/special mix, interleaving, boss waves,
                            #   stat scaling, splitter children
-      EnemyTraits.ts       # armor damage, terrain speed multiplier and damage
+      EnemyTraits.ts       # armor damage, terrain speed multiplier and damage, war-aura damage
+      Auras.ts             # who's healed, jammed and war-buffed (pure, per aura tick)
+      BurrowCycle.ts       # burrower surface/underground timer
+      SpawnerTimer.ts      # carrier / Hive Queen minion drops, capped
       GameClock.ts         # speed multiplier, pause, fixed-step accumulator
       KeySequence.ts       # vim-style key sequences (gg, dd, r…) with timeout → actions
       TileCursor.ts        # keyboard cursor: position, clamping, motions, tower jumps
@@ -91,7 +96,9 @@ shelter/
       towerLevels.ts       # turret Lv1–Lv8 stat/cost/unlock table
       shelterLevels.ts      # shelter Lv1–Lv5 max HP/cost/unlock table
       enemyTiers.ts        # enemy T1–T8 base stats and wave ranges
-      specialEnemies.ts     # runner / armored / splitter stats and traits
+      specialEnemies.ts     # the nine specials' stats and traits (+ shared trait types)
+      bosses.ts            # the six boss types: multipliers, reward, debut wave, trait
+      waveThemes.ts        # normal / swarm / tank / rush / elite wave shapes
       keybindings.ts        # every key binding, per scene (source of truth for help too)
       tileTypes.ts          # tile types: walkable, speed, edit cost/key, unlock wave
       textures.ts          # texture keys and render depths
@@ -119,20 +126,36 @@ only add the Phaser sprites on top.
   is removed. Game over when shelter HP reaches `0`. The player can repair it from the
   HUD at any time: `round(maxHp × SHELTER_REPAIR_RATIO)` HP (clamped to max) for
   `SHELTER_REPAIR_BASE_COST + wave * SHELTER_REPAIR_COST_PER_WAVE` scrap.
-- **Enemy**: eight stat tiers (T1–T8, `data/enemyTiers.ts`), three specials
-  (`data/specialEnemies.ts`) and a boss, each with its own look. Walks the current
-  fastest route at its speed (halved on gravel), has HP, contact damage and a kill
-  reward (all computed per wave by `WaveComposer`), dies when HP reaches `0`. Specials
-  carry one trait each, set as optional `EnemySpec` fields and applied generically by
-  `Enemy` (never `if (kind === …)`):
-  - **Runner**: `ignoresGravel` (gravel only: water still slows it).
-  - **Armored**: `armor`; each hit deals `max(damage − ARMORED_ARMOR, ARMOR_MIN_DAMAGE)`.
-  - **Splitter**: `splitsInto`; on death spawns `SPLITTER_CHILD_COUNT` smaller T1-based
-    children where it died, worth `SPLITTER_CHILD_REWARD_RATIO` of T1's reward, each
-    counting as a kill. They're outside the spawn queue; `WaveManager` waits for them
-    because it counts every live enemy.
+- **Enemy**: eight stat tiers (T1–T8, `data/enemyTiers.ts`), nine specials
+  (`data/specialEnemies.ts`) and six boss types (`data/bosses.ts`), each with its own
+  look. Walks the current fastest route at its terrain speed, has HP, contact damage and
+  a kill reward (all computed per wave by `WaveComposer`), dies when HP reaches `0`.
+  Specials and bosses carry traits from an `EnemyTraitSet`, copied onto optional
+  `EnemySpec` fields and applied generically by `Enemy` (never `if (kind === …)`):
+  - `slowImmune`: tile types that don't slow it (runner: gravel; swimmer, leviathan:
+    gravel and water).
+  - `armor`: each hit deals `max(damage − armor, ARMOR_MIN_DAMAGE)` (armored 8,
+    juggernaut 150). Fire ignores armor.
+  - `splitsInto` (splitter): on death spawns `SPLITTER_CHILD_COUNT` smaller T1-based
+    children where it died, worth `SPLITTER_CHILD_REWARD_RATIO` of T1's reward.
+  - `spawner` (carrier, Hive Queen): drops minions every `everyMs`, at most `maxTimes`.
+    Children of both kinds start where the parent stands and each counts as a kill.
+    They're outside the spawn queue; `WaveManager` waits for them because it counts
+    every live enemy.
+  - `fireproof` (salamander, phoenix): no fire damage.
+  - `healAura` (healer), `jamAura` (jammer: towers in range fire at ×2 cooldown, grey
+    guns), `warAura` (warlord: others in range move ×1.3 and take ×0.7 damage). Auras
+    are computed by `Auras` every `AURA_TICK_MS` of game time, not per step; same-kind
+    auras don't stack; heals skip bosses and healers. Aura ranges are drawn as circles.
+  - `burrow` (burrower): 3 s surface / 2 s underground. Underground it's untargetable,
+    drawn as a mound, and projectiles arriving then miss; fire still burns it.
+  - `revive` (phoenix): its first death leaves a dormant ember (alive for the wave,
+    untargetable, not moving) that rises after `delayMs` at `hpRatio` HP. Only the final
+    death pays the kill.
+  - The status line introduces each special, boss and theme the first time it appears
+    in a game (`New: Healer · heals nearby enemies`).
 - **Tower**: a single turret type with levels Lv1–Lv8 (`data/towerLevels.ts`), placed
-  at Lv1 on valid non-path tiles. Auto-targets the nearest enemy within range and fires
+  at Lv1 on valid non-path tiles. Auto-targets the nearest targetable enemy within range and fires
   on a cooldown. Clicking it opens a panel to upgrade in place (gated by wave and cost)
   or sell for `TOWER_SELL_REFUND_RATIO` × total invested, freeing the tile.
 - **Upgrades** (towers and shelter share `UpgradePlan`): `u` takes one level of what's
@@ -196,7 +219,8 @@ Each wave increases threat via **more enemies and tougher enemies** (not just fa
 spawn pacing), composed by `WaveComposer`:
 - Enemy count per wave: `WAVE_BASE_ENEMY_COUNT + wave * WAVE_COUNT_INCREMENT`
 - Active specials are those with `appearsFrom ≤ wave` (they never retire). Each takes
-  `ceil(count × SPECIAL_SHARE)` out of the wave's count, so wave size is unchanged.
+  `ceil(count × min(SPECIAL_SHARE, SPECIAL_MAX_TOTAL_SHARE / activeSpecials))` out of the
+  wave's count, so wave size is unchanged and tiers keep about half of it.
 - Active tiers are those with `appearsFrom ≤ wave ≤ retiresAfter`. The remaining count
   is split evenly across them, remainder to the weakest; tiers spawn weakest first, and
   specials (round-robin between kinds) are interleaved evenly through them.
@@ -204,16 +228,23 @@ spawn pacing), composed by `WaveComposer`:
 - Enemy speed per wave: `tierSpeed * (1 + wave * WAVE_SPEED_SCALE_PER_WAVE)`, capped at
   `WAVE_SPEED_MAX_MULTIPLIER` so it never becomes unfair/unreadable
 - Every `BOSS_WAVE_INTERVAL`th wave has `BOSS_WAVE_ESCORT_RATIO` of the usual count
-  (rounded up, specials included) plus a boss spawned last, built from the strongest
-  active tier's HP and T1's speed (see the `BOSS_*` constants). The boss has no trait.
-  The HUD announces it during the breather.
-- Enemies within a wave spawn every `WAVE_SPAWN_INTERVAL_MS`.
+  (rounded up, specials included) plus its boss(es) spawned last, built from the
+  strongest active tier's HP and T1's speed times the boss row's multipliers, rewarding
+  `reward + wave × BOSS_REWARD_PER_WAVE`. A boss debuts on the boss wave equal to its
+  `appearsFrom`; other boss waves take `activeBosses[(wave / BOSS_WAVE_INTERVAL) %
+  active]`. From `BOSS_PAIR_FROM_WAVE` the next active boss in table order joins it.
+  During the breather a banner under the HUD names the bosses.
+- Non-boss waves from `WAVE_THEMES_FROM_WAVE` take `WAVE_THEMES[wave % length]`
+  (`data/waveThemes.ts`: count, HP, speed, reward and spawn-interval multipliers, or
+  specials only). Theme speed is applied after the speed cap (rush breaks it on
+  purpose). Children are themed too. The banner shows the theme during the breather.
+- Enemies within a wave spawn every `WAVE_SPAWN_INTERVAL_MS` (× the theme's multiplier).
 - A `WAVE_BREATHER_MS` countdown precedes every wave (including the first) and starts
   once the previous wave is fully cleared. The HUD's "Next wave" button skips it.
 
-All the constants above (increments, scale factors, starting currency, boss, repair,
+All the constants above (increments, scale factors, starting currency, boss, theme, aura, repair,
 refund, speed, special, tile-edit and key-timeout settings) belong in
-`src/config.ts` as named constants, and the per-level (tower and shelter) / per-tier / per-special /
+`src/config.ts` as named constants, and the per-level (tower and shelter) / per-tier / per-special / per-boss / per-theme /
 per-map / per-tile-type / key-binding tables in `src/data/`. Never hardcode them
 inline in entities/systems, so balancing stays a data-only change.
 

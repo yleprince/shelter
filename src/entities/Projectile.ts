@@ -29,7 +29,8 @@ export class Projectile {
     const dy = this.target.y - this.y;
     const dist = Math.hypot(dx, dy);
     const step = (PROJECTILE_SPEED * deltaMs) / 1000;
-    if (dist <= Math.max(step, PROJECTILE_HIT_RADIUS)) return 'hit';
+    // A target that burrowed or went dormant mid-flight makes the shot miss.
+    if (dist <= Math.max(step, PROJECTILE_HIT_RADIUS)) return this.target.targetable ? 'hit' : 'expired';
     this.x += (dx / dist) * step;
     this.y += (dy / dist) * step;
     return 'flying';

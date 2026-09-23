@@ -1,5 +1,5 @@
-import { WAVE_BREATHER_MS, WAVE_SPAWN_INTERVAL_MS } from '../config';
-import { composeWave, isBossWave, type EnemySpec } from './WaveComposer';
+import { WAVE_BREATHER_MS } from '../config';
+import { composeWave, isBossWave, waveSpawnIntervalMs, type EnemySpec } from './WaveComposer';
 
 export type WavePhase = 'breather' | 'spawning' | 'clearing';
 
@@ -8,6 +8,7 @@ export class WaveManager {
   private currentPhase: WavePhase = 'breather';
   private breatherRemainingMs = WAVE_BREATHER_MS;
   private spawnTimerMs = 0;
+  private spawnIntervalMs = 0;
   private queue: EnemySpec[] = [];
 
   get wave(): number {
@@ -52,15 +53,16 @@ export class WaveManager {
     this.waveNumber++;
     this.currentPhase = 'spawning';
     this.queue = composeWave(this.waveNumber);
+    this.spawnIntervalMs = waveSpawnIntervalMs(this.waveNumber);
     // Spawn the first enemy immediately rather than after one interval of dead air.
-    this.spawnTimerMs = WAVE_SPAWN_INTERVAL_MS;
+    this.spawnTimerMs = this.spawnIntervalMs;
   }
 
   private updateSpawning(deltaMs: number): EnemySpec[] {
     this.spawnTimerMs += deltaMs;
     const spawned: EnemySpec[] = [];
-    while (this.spawnTimerMs >= WAVE_SPAWN_INTERVAL_MS && this.queue.length > 0) {
-      this.spawnTimerMs -= WAVE_SPAWN_INTERVAL_MS;
+    while (this.spawnTimerMs >= this.spawnIntervalMs && this.queue.length > 0) {
+      this.spawnTimerMs -= this.spawnIntervalMs;
       spawned.push(this.queue.shift()!);
     }
     if (this.queue.length === 0) this.currentPhase = 'clearing';

@@ -9,7 +9,14 @@ import {
 import { ENEMY_TIERS } from '../src/data/enemyTiers';
 import { SPECIAL_ENEMIES } from '../src/data/specialEnemies';
 import { TILE_TYPES } from '../src/data/tileTypes';
-import { armoredDamage, terrainDamage, terrainDamagePerSec, terrainSpeedMultiplier } from '../src/systems/EnemyTraits';
+import { BOSSES } from '../src/data/bosses';
+import {
+  armoredDamage,
+  damageTaken,
+  terrainDamage,
+  terrainDamagePerSec,
+  terrainSpeedMultiplier,
+} from '../src/systems/EnemyTraits';
 import { scaledHp, scaledSpeed, specialSpec, splitterChildren } from '../src/systems/WaveComposer';
 
 const special = (id: string) => SPECIAL_ENEMIES.find((s) => s.id === id)!;
@@ -27,24 +34,38 @@ describe('armor', () => {
   });
 });
 
+const runnerImmune = special('runner').traits.slowImmune;
+const swimmerImmune = special('swimmer').traits.slowImmune;
+
 describe('terrain speed', () => {
-  it('slows on gravel unless the enemy ignores it', () => {
-    expect(terrainSpeedMultiplier('gravel', false)).toBe(TILE_TYPES.gravel.speedMultiplier);
-    expect(terrainSpeedMultiplier('gravel', true)).toBe(1);
-    expect(terrainSpeedMultiplier('path', false)).toBe(1);
-    expect(terrainSpeedMultiplier(undefined, false)).toBe(1);
+  it('slows on gravel unless the enemy is immune to it', () => {
+    expect(terrainSpeedMultiplier('gravel')).toBe(TILE_TYPES.gravel.speedMultiplier);
+    expect(terrainSpeedMultiplier('gravel', runnerImmune)).toBe(1);
+    expect(terrainSpeedMultiplier('path')).toBe(1);
+    expect(terrainSpeedMultiplier(undefined)).toBe(1);
   });
 
-  it('slows everyone on water, runners included', () => {
-    expect(terrainSpeedMultiplier('water', false)).toBe(TILE_TYPES.water.speedMultiplier);
-    expect(terrainSpeedMultiplier('water', true)).toBe(TILE_TYPES.water.speedMultiplier);
+  it('slows runners on water, but not swimmers or the leviathan', () => {
+    expect(terrainSpeedMultiplier('water')).toBe(TILE_TYPES.water.speedMultiplier);
+    expect(terrainSpeedMultiplier('water', runnerImmune)).toBe(TILE_TYPES.water.speedMultiplier);
+    expect(terrainSpeedMultiplier('water', swimmerImmune)).toBe(1);
+    expect(terrainSpeedMultiplier('gravel', swimmerImmune)).toBe(1);
+    expect(BOSSES.find((b) => b.id === 'leviathan')!.traits.slowImmune).toEqual(['gravel', 'water']);
     expect(TILE_TYPES.water.speedMultiplier).toBeLessThan(TILE_TYPES.gravel.speedMultiplier);
   });
 
-  it('speeds everyone up on ice, runners included', () => {
-    expect(terrainSpeedMultiplier('ice', false)).toBe(TILE_TYPES.ice.speedMultiplier);
-    expect(terrainSpeedMultiplier('ice', true)).toBe(TILE_TYPES.ice.speedMultiplier);
+  it('speeds everyone up on ice, immune enemies included', () => {
+    expect(terrainSpeedMultiplier('ice')).toBe(TILE_TYPES.ice.speedMultiplier);
+    expect(terrainSpeedMultiplier('ice', runnerImmune)).toBe(TILE_TYPES.ice.speedMultiplier);
+    expect(terrainSpeedMultiplier('ice', swimmerImmune)).toBe(TILE_TYPES.ice.speedMultiplier);
     expect(TILE_TYPES.ice.speedMultiplier).toBeGreaterThan(1);
+  });
+});
+
+describe('war aura damage', () => {
+  it('scales damage taken', () => {
+    expect(damageTaken(100, 0.7)).toBeCloseTo(70);
+    expect(damageTaken(100, 1)).toBe(100);
   });
 });
 
@@ -65,7 +86,13 @@ describe('terrain damage', () => {
   });
 
   it('leaves fire speed and routing alone', () => {
-    expect(terrainSpeedMultiplier('fire', false)).toBe(1);
+    expect(terrainSpeedMultiplier('fire')).toBe(1);
+  });
+
+  it('spares fireproof enemies', () => {
+    expect(terrainDamagePerSec('fire', 250, true)).toBe(0);
+    expect(terrainDamage('fire', 250, 16, true)).toBe(0);
+    expect(specialSpec(special('salamander'), 260).fireproof).toBe(true);
   });
 });
 
@@ -75,7 +102,7 @@ describe('special specs', () => {
     expect(runner.hp).toBe(scaledHp(special('runner').hp, 8));
     expect(runner.speed).toBe(scaledSpeed(special('runner').speed, 8));
     expect(runner.reward).toBe(special('runner').reward + 8 * ENEMY_KILL_REWARD_PER_WAVE);
-    expect(runner.ignoresGravel).toBe(true);
+    expect(runner.slowImmune).toEqual(['gravel']);
     expect(runner.armor).toBeUndefined();
 
     const armored = specialSpec(special('armored'), 30);
@@ -100,6 +127,27 @@ describe('special specs', () => {
       expect(child.reward).toBe(Math.floor((t1.reward + 14 * ENEMY_KILL_REWARD_PER_WAVE) * SPLITTER_CHILD_REWARD_RATIO));
       expect(child.splitsInto).toBeUndefined();
       expect(child.scale).toBeLessThan(1);
+    }
+  });
+});
+
+describe('new special specs', () => {
+  it('carry their aura, burrow and revive data', () => {
+    expect(specialSpec(special('healer'), 180).healAura).toEqual({ radius: 80, ratioPerSec: 0.03 });
+    expect(specialSpec(special('jammer'), 200).jamAura).toEqual({ radius: 100, cooldownMultiplier: 2 });
+    expect(specialSpec(special('burrower'), 210).burrow).toEqual({ surfaceMs: 3000, undergroundMs: 2000 });
+  });
+
+  it('gives a carrier five drops of two T1-based minions', () => {
+    const carrier = specialSpec(special('carrier'), 230);
+    const t1 = ENEMY_TIERS[0];
+    expect(carrier.spawner).toMatchObject({ everyMs: 4000, maxTimes: 5 });
+    expect(carrier.spawner!.children).toHaveLength(2);
+    for (const child of carrier.spawner!.children) {
+      expect(child.kind).toBe('T1');
+      expect(child.hp).toBe(scaledHp(t1.hp, 230));
+      expect(child.reward).toBe(Math.floor((t1.reward + 230 * ENEMY_KILL_REWARD_PER_WAVE) * SPLITTER_CHILD_REWARD_RATIO));
+      expect(child.spawner).toBeUndefined();
     }
   });
 });

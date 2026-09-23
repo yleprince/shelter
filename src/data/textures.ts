@@ -11,6 +11,8 @@ export const TEXTURES = {
   ice: 'tile-ice',
   towerBase: 'tower-base',
   projectile: 'projectile',
+  // What a burrower looks like while underground.
+  burrowMound: 'enemy-burrow-mound',
 } as const;
 
 // Indexed by tower level - 1.
@@ -31,7 +33,18 @@ export const ENEMY_TEXTURES: Readonly<Record<EnemyKind, string>> = {
   runner: 'enemy-runner',
   armored: 'enemy-armored',
   splitter: 'enemy-splitter',
-  boss: 'enemy-boss',
+  swimmer: 'enemy-swimmer',
+  healer: 'enemy-healer',
+  jammer: 'enemy-jammer',
+  burrower: 'enemy-burrower',
+  carrier: 'enemy-carrier',
+  salamander: 'enemy-salamander',
+  brute: 'enemy-boss',
+  hiveQueen: 'enemy-boss-hiveQueen',
+  juggernaut: 'enemy-boss-juggernaut',
+  warlord: 'enemy-boss-warlord',
+  leviathan: 'enemy-boss-leviathan',
+  phoenix: 'enemy-boss-phoenix',
 };
 
 export const DEPTH = {

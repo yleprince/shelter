@@ -7,8 +7,9 @@ import { TOWER_PLACE_COST } from '../data/towerLevels';
 import type { Tower } from '../entities/Tower';
 import type { TileType } from '../systems/MapGrid';
 import { repairCost } from '../systems/ShelterHealth';
+import { bossesForWave, themeForWave } from '../systems/WaveComposer';
 import { createHelpOverlay } from '../ui/HelpOverlay';
-import { editBlockerText, tileTypeDescription, upgradeBlockerText } from '../ui/labels';
+import { editBlockerText, tileTypeDescription, upgradeBlockerText, waveBanner } from '../ui/labels';
 import type { GameScene } from './GameScene';
 
 const HUD_HEIGHT = HUD_ROWS * TILE_SIZE;
@@ -52,6 +53,7 @@ export class UIScene extends Phaser.Scene {
   private gameScene!: GameScene;
   private statsText!: Phaser.GameObjects.Text;
   private waveText!: Phaser.GameObjects.Text;
+  private waveBanner!: Phaser.GameObjects.Text;
   private nextWaveButton!: Phaser.GameObjects.Text;
   private repairButton!: Phaser.GameObjects.Text;
   private shelterUpgradeButton!: Phaser.GameObjects.Text;
@@ -106,6 +108,17 @@ export class UIScene extends Phaser.Scene {
       CONTROLS_STYLE,
     ).setOrigin(1, 0.5);
 
+    // Boss names and themes don't fit on the stats line, so they get a banner under the HUD.
+    this.waveBanner = this.add
+      .text(GAME_WIDTH / 2, HUD_HEIGHT + PANEL_MARGIN, '', {
+        ...TEXT_STYLE,
+        fontSize: '14px',
+        backgroundColor: '#1c1a16dd',
+        padding: { x: 10, y: 4 },
+      })
+      .setOrigin(0.5, 0)
+      .setVisible(false);
+
     this.add.rectangle(0, STATUS_TOP, GAME_WIDTH, STATUS_HEIGHT, 0x111111, 0.9).setOrigin(0).setInteractive();
     const statusStyle = { ...TEXT_STYLE, fontSize: '14px' };
     this.statusLeft = this.add.text(12, STATUS_TOP + STATUS_HEIGHT / 2, '', statusStyle).setOrigin(0, 0.5);
@@ -128,9 +141,16 @@ export class UIScene extends Phaser.Scene {
     );
 
     const inBreather = waves.phase === 'breather';
-    const nextLabel = waves.nextWaveIsBoss ? 'BOSS wave' : `Wave ${waves.wave + 1}`;
-    this.waveText.setText(inBreather ? `${nextLabel} in ${waves.breatherSecondsLeft}s` : `Wave ${waves.wave}`);
+    const next = waves.wave + 1;
+    const nextLabel = waves.nextWaveIsBoss ? 'BOSS wave' : `Wave ${next}`;
+    setText(this.waveText, inBreather ? `${nextLabel} in ${waves.breatherSecondsLeft}s` : `Wave ${waves.wave}`);
     setColor(this.waveText, inBreather && waves.nextWaveIsBoss ? '#ff6b5b' : '#e0d6b8');
+    const banner = inBreather ? waveBanner(next, bossesForWave(next), themeForWave(next)) : undefined;
+    this.waveBanner.setVisible(banner !== undefined);
+    if (banner) {
+      setText(this.waveBanner, banner);
+      setColor(this.waveBanner, waves.nextWaveIsBoss ? '#ff6b5b' : '#ffd166');
+    }
     this.nextWaveButton.setVisible(inBreather);
 
     this.speedButtons.forEach((button, i) =>

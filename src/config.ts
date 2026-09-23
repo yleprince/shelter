@@ -32,6 +32,9 @@ export const ENEMY_KILL_REWARD_PER_WAVE = 1;
 // Special enemies live in data/specialEnemies.ts. Each one takes this share of a wave
 // (rounded up) out of the normal count, so wave size doesn't change.
 export const SPECIAL_SHARE = 0.1;
+// With many specials active they split this share of the wave evenly instead, so tiers
+// still make up at least half of it.
+export const SPECIAL_MAX_TOTAL_SHARE = 0.5;
 export const ARMORED_ARMOR = 8;
 export const ARMOR_MIN_DAMAGE = 1;
 export const SPLITTER_CHILD_COUNT = 2;
@@ -52,10 +55,18 @@ export const WAVE_BREATHER_MS = 8000;
 
 export const BOSS_WAVE_INTERVAL = 10;
 export const BOSS_WAVE_ESCORT_RATIO = 0.5;
-export const BOSS_HP_MULTIPLIER = 20;
-export const BOSS_SPEED_MULTIPLIER = 0.5;
-export const BOSS_CONTACT_DAMAGE = 50;
-export const BOSS_REWARD = 200;
+// Boss stats and traits live in data/bosses.ts.
+// A flat boss reward falls behind late tiers' per-wave rewards; this keeps it ahead.
+export const BOSS_REWARD_PER_WAVE = 5;
+export const BOSS_PAIR_FROM_WAVE = 200;
+
+// Wave themes live in data/waveThemes.ts; earlier waves (and every boss wave) are normal.
+export const WAVE_THEMES_FROM_WAVE = 201;
+
+// Auras (heal, jam, war) are re-evaluated on this game-time tick rather than every step:
+// ~500 enemies × ~30 carriers every step at x500 would be millions of distance checks a
+// frame, and nobody can see the difference.
+export const AURA_TICK_MS = 250;
 
 export const GAME_SPEEDS: readonly number[] = [1, 5, 100, 500];
 export const SIM_STEP_MS = 1000 / 60;

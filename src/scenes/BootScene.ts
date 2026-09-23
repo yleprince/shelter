@@ -3,7 +3,22 @@ import { TILE_SIZE } from '../config';
 import type { EnemyKind } from '../data/enemyTiers';
 import { ENEMY_TEXTURES, SHELTER_TEXTURES, TEXTURES, TOWER_GUN_TEXTURES } from '../data/textures';
 
-type EnemyShape = 'round' | 'horned' | 'ringed' | 'boss' | 'elongated' | 'plated' | 'lobed';
+type EnemyShape =
+  | 'round'
+  | 'horned'
+  | 'ringed'
+  | 'boss'
+  | 'elongated'
+  | 'plated'
+  | 'lobed'
+  | 'finned'
+  | 'cross'
+  | 'antenna'
+  | 'drill'
+  | 'pods'
+  | 'tailed'
+  | 'crowned'
+  | 'winged';
 
 interface EnemyLook {
   shape: EnemyShape;
@@ -11,6 +26,8 @@ interface EnemyLook {
   height: number;
   body: number;
   eyes: number;
+  // Bosses get a red ring around the body on top of their own silhouette.
+  bossRing?: boolean;
 }
 
 const round = (size: number, body: number, eyes: number, shape: EnemyShape = 'round'): EnemyLook => ({
@@ -32,10 +49,21 @@ const ENEMY_LOOKS: Record<EnemyKind, EnemyLook> = {
   T6: round(31, 0x2f8a78, 0xffd166),
   T7: round(33, 0xb5642f, 0xffffff, 'horned'),
   T8: round(35, 0x5a2f8a, 0xff6b5b, 'ringed'),
-  boss: round(40, 0x2a2a2a, 0xff3b2f, 'boss'),
   runner: { shape: 'elongated', width: 30, height: 14, body: 0xd4e157, eyes: 0x1a1a1a },
   armored: { shape: 'plated', width: 26, height: 26, body: 0x8a8f94, eyes: 0xff6b5b },
   splitter: { shape: 'lobed', width: 32, height: 22, body: 0xc75b8f, eyes: 0xffffff },
+  swimmer: { shape: 'finned', width: 32, height: 22, body: 0x3f8fe0, eyes: 0xffffff },
+  healer: { shape: 'cross', width: 28, height: 28, body: 0xf2f2ea, eyes: 0x1a1a1a },
+  jammer: { shape: 'antenna', width: 26, height: 36, body: 0x5e6b78, eyes: 0x9ae0ff },
+  burrower: { shape: 'drill', width: 28, height: 36, body: 0x8a6a45, eyes: 0xffd166 },
+  carrier: { shape: 'pods', width: 38, height: 32, body: 0x6b7a3a, eyes: 0xff6b5b },
+  salamander: { shape: 'tailed', width: 40, height: 18, body: 0xd9432f, eyes: 0xffd166 },
+  brute: round(40, 0x2a2a2a, 0xff3b2f, 'boss'),
+  hiveQueen: { shape: 'crowned', width: 42, height: 50, body: 0x7a3fa3, eyes: 0xffd166, bossRing: true },
+  juggernaut: { shape: 'plated', width: 44, height: 44, body: 0x4d5258, eyes: 0xff3b2f, bossRing: true },
+  warlord: { shape: 'horned', width: 42, height: 42, body: 0x8a1f1f, eyes: 0xffd166, bossRing: true },
+  leviathan: { shape: 'finned', width: 52, height: 38, body: 0x1f3f8a, eyes: 0x9ae0ff, bossRing: true },
+  phoenix: { shape: 'winged', width: 56, height: 40, body: 0xf07a1a, eyes: 0xffd24a, bossRing: true },
 };
 
 interface GunLook {
@@ -197,6 +225,14 @@ export class BootScene extends Phaser.Scene {
     for (const [kind, look] of Object.entries(ENEMY_LOOKS) as [EnemyKind, EnemyLook][]) {
       this.draw(ENEMY_TEXTURES[kind], look.width, look.height, (g) => paintEnemy(g, look));
     }
+    // Faint on purpose: it can't be shot, so it shouldn't read as a target.
+    const rng = new Phaser.Math.RandomDataGenerator(['mound']);
+    this.draw(TEXTURES.burrowMound, 28, 14, (g) => {
+      g.fillStyle(0x3d3629, 0.8).fillEllipse(14, 8, 28, 12);
+      g.fillStyle(0x6b5b45, 0.8).fillEllipse(14, 7, 20, 8);
+      g.fillStyle(0x8c7a5b);
+      for (let i = 0; i < 5; i++) g.fillRect(rng.between(6, 20), rng.between(4, 9), 2, 2);
+    });
   }
 
   private makeProjectile(): void {
@@ -248,46 +284,138 @@ function paintShelter(g: Phaser.GameObjects.Graphics, size: number, level: numbe
 function paintEnemy(g: Phaser.GameObjects.Graphics, look: EnemyLook): void {
   const { width: w, height: h } = look;
   const cx = w / 2;
-  const cy = h / 2;
+  let bodyY = h / 2;
+  let bodyR = Math.min(w, h) / 2;
   const eyeRadius = Math.max(2, Math.min(w, h) / 12);
-  let eyeY = cy - 2;
   let eyeOffset = w / 6;
+  const outline = 0x1a1a1a;
+  const disc = (y: number, r: number) => {
+    g.fillStyle(outline).fillCircle(cx, y, r);
+    g.fillStyle(look.body).fillCircle(cx, y, r - 2);
+  };
+  const ellipse = (x: number, y: number, ew: number, eh: number) => {
+    g.fillStyle(outline).fillEllipse(x, y, ew, eh);
+    g.fillStyle(look.body).fillEllipse(x, y, ew - 4, eh - 4);
+  };
 
   switch (look.shape) {
     case 'elongated':
-      g.fillStyle(0x1a1a1a).fillEllipse(cx, cy, w, h);
-      g.fillStyle(look.body).fillEllipse(cx, cy, w - 4, h - 4);
-      eyeY = cy - 1;
+      ellipse(cx, bodyY, w, h);
       eyeOffset = w / 5;
       break;
     case 'plated':
-      g.fillStyle(0x1a1a1a).fillRect(0, 0, w, h);
+      g.fillStyle(outline).fillRect(0, 0, w, h);
       g.fillStyle(look.body).fillRect(2, 2, w - 4, h - 4);
       g.lineStyle(2, 0x5a5e62).lineBetween(2, h / 2 + 3, w - 2, h / 2 + 3).lineBetween(cx, h / 2 + 3, cx, h - 2);
       g.fillStyle(0xd0d4d8).fillRect(4, 4, 2, 2).fillRect(w - 6, 4, 2, 2).fillRect(4, h - 6, 2, 2).fillRect(w - 6, h - 6, 2, 2);
       break;
     case 'lobed': {
       const r = h / 2;
-      g.fillStyle(0x1a1a1a).fillCircle(r, cy, r).fillCircle(w - r, cy, r);
-      g.fillStyle(look.body).fillCircle(r, cy, r - 2).fillCircle(w - r, cy, r - 2);
-      g.lineStyle(1, 0x1a1a1a, 0.6).lineBetween(cx, 3, cx, h - 3);
+      g.fillStyle(outline).fillCircle(r, bodyY, r).fillCircle(w - r, bodyY, r);
+      g.fillStyle(look.body).fillCircle(r, bodyY, r - 2).fillCircle(w - r, bodyY, r - 2);
+      g.lineStyle(1, outline, 0.6).lineBetween(cx, 3, cx, h - 3);
       eyeOffset = w / 4;
       break;
     }
+    // Streamlined body with a dorsal fin.
+    case 'finned': {
+      const finTop = 0;
+      bodyY = h * 0.65;
+      bodyR = (h * 0.6) / 2;
+      g.fillStyle(outline).fillTriangle(cx - w * 0.22, bodyY, cx + w * 0.12, bodyY, cx - w * 0.08, finTop);
+      g.fillStyle(0x9ad0ff).fillTriangle(cx - w * 0.18, bodyY - 1, cx + w * 0.08, bodyY - 1, cx - w * 0.08, finTop + 3);
+      ellipse(cx, bodyY, w, h * 0.6);
+      eyeOffset = w / 5;
+      break;
+    }
+    // White body with a green cross.
+    case 'cross': {
+      disc(bodyY, bodyR);
+      const arm = bodyR * 0.8;
+      g.fillStyle(0x3fa34a).fillRect(cx - arm / 2, bodyY + 1, arm, 4).fillRect(cx - 2, bodyY + 3 - arm / 2, 4, arm);
+      bodyY -= 4;
+      break;
+    }
+    // Antenna with pulsing rings above a round body.
+    case 'antenna': {
+      bodyR = w / 2;
+      bodyY = h - bodyR;
+      g.lineStyle(2, 0xd0d4d8).lineBetween(cx, bodyY - bodyR, cx, 5);
+      g.fillStyle(0x9ae0ff).fillCircle(cx, 5, 2.5);
+      g.lineStyle(1, 0x9ae0ff, 0.9).strokeCircle(cx, 5, 5);
+      disc(bodyY, bodyR);
+      break;
+    }
+    // Drill nose on top of a round body.
+    case 'drill': {
+      bodyR = w / 2;
+      bodyY = h - bodyR;
+      const base = bodyY - bodyR + 6;
+      g.fillStyle(outline).fillTriangle(cx - w * 0.32, base, cx + w * 0.32, base, cx, 0);
+      g.fillStyle(0xb0b4b8).fillTriangle(cx - w * 0.26, base - 1, cx + w * 0.26, base - 1, cx, 3);
+      g.lineStyle(1, 0x5a5e62).lineBetween(cx - 5, base - 4, cx + 5, base - 7).lineBetween(cx - 3, base - 9, cx + 3, base - 11);
+      disc(bodyY, bodyR);
+      break;
+    }
+    // Large body carrying pods on its back.
+    case 'pods': {
+      bodyY = h * 0.6;
+      bodyR = (h * 0.8) / 2;
+      for (const dx of [-w * 0.28, 0, w * 0.28]) {
+        g.fillStyle(outline).fillCircle(cx + dx, 7, 6);
+        g.fillStyle(0xa3b85a).fillCircle(cx + dx, 7, 4);
+      }
+      ellipse(cx, bodyY, w, h * 0.8);
+      break;
+    }
+    // Long body with a tail.
+    case 'tailed': {
+      g.fillStyle(outline).fillTriangle(0, bodyY, w * 0.35, bodyY - h * 0.3, w * 0.35, bodyY + h * 0.3);
+      g.fillStyle(look.body).fillTriangle(3, bodyY, w * 0.35, bodyY - h * 0.2, w * 0.35, bodyY + h * 0.2);
+      ellipse(w * 0.6, bodyY, w * 0.8, h);
+      g.fillStyle(0xffb347).fillCircle(w * 0.45, bodyY + 2, 1.5).fillCircle(w * 0.6, bodyY + 3, 1.5);
+      bodyY -= 1;
+      g.fillStyle(look.eyes).fillCircle(w * 0.8, bodyY - 2, eyeRadius).fillCircle(w * 0.66, bodyY - 2, eyeRadius);
+      return;
+    }
+    // Round body under a crown.
+    case 'crowned': {
+      bodyR = w / 2;
+      bodyY = h - bodyR;
+      const base = bodyY - bodyR + 8;
+      g.fillStyle(0xffd166);
+      for (const dx of [-w * 0.25, 0, w * 0.25]) g.fillTriangle(cx + dx - 6, base, cx + dx + 6, base, cx + dx, 0);
+      disc(bodyY, bodyR);
+      break;
+    }
+    // Round body with spread wings.
+    case 'winged': {
+      bodyR = h / 2 - 2;
+      g.fillStyle(0xffd24a).fillTriangle(cx - bodyR + 4, bodyY - 4, 0, 2, 6, bodyY + 10);
+      g.fillTriangle(cx + bodyR - 4, bodyY - 4, w, 2, w - 6, bodyY + 10);
+      g.fillStyle(0xc0321f).fillTriangle(cx - bodyR + 4, bodyY, 4, 8, 8, bodyY + 6);
+      g.fillTriangle(cx + bodyR - 4, bodyY, w - 4, 8, w - 8, bodyY + 6);
+      disc(bodyY, bodyR);
+      eyeOffset = bodyR / 3;
+      break;
+    }
     default:
-      g.fillStyle(0x1a1a1a).fillCircle(cx, cy, w / 2);
-      g.fillStyle(look.body).fillCircle(cx, cy, w / 2 - 2);
+      disc(bodyY, bodyR);
   }
 
-  g.fillStyle(look.eyes).fillCircle(cx - eyeOffset, eyeY, eyeRadius).fillCircle(cx + eyeOffset, eyeY, eyeRadius);
+  if (look.bossRing && look.shape === 'finned') g.lineStyle(3, 0xff3b2f).strokeEllipse(cx, bodyY, w - 6, bodyR * 2 - 4);
+  else if (look.bossRing) g.lineStyle(3, 0xff3b2f).strokeCircle(cx, bodyY, bodyR - 3);
+  g.fillStyle(look.eyes)
+    .fillCircle(cx - eyeOffset, bodyY - 2, eyeRadius)
+    .fillCircle(cx + eyeOffset, bodyY - 2, eyeRadius);
 
   if (look.shape === 'horned') {
     g.fillStyle(0xe0d6b8)
       .fillTriangle(cx - w / 4 - 3, 6, cx - w / 4 + 3, 6, cx - w / 4, 0)
       .fillTriangle(cx + w / 4 - 3, 6, cx + w / 4 + 3, 6, cx + w / 4, 0);
   } else if (look.shape === 'ringed') {
-    g.lineStyle(2, 0xffd166).strokeCircle(cx, cy, w / 2 - 4);
+    g.lineStyle(2, 0xffd166).strokeCircle(cx, bodyY, w / 2 - 4);
   } else if (look.shape === 'boss') {
-    g.lineStyle(3, 0xff3b2f).strokeCircle(cx, cy, w / 2 - 2);
+    g.lineStyle(3, 0xff3b2f).strokeCircle(cx, bodyY, w / 2 - 2);
   }
 }

@@ -7,16 +7,21 @@ export function armoredDamage(damage: number, armor: number): number {
   return Math.max(damage - armor, ARMOR_MIN_DAMAGE);
 }
 
-export function terrainDamagePerSec(type: TileType | undefined, wave: number): number {
+// The war aura's damage reduction applies after armor, to hits and burns alike.
+export function damageTaken(amount: number, damageTakenMultiplier: number): number {
+  return amount * damageTakenMultiplier;
+}
+
+export function terrainDamagePerSec(type: TileType | undefined, wave: number, fireproof = false): number {
   const dps = type && TILE_TYPES[type].damagePerSec;
-  return dps ? dps.base + wave * dps.perWave : 0;
+  return dps && !fireproof ? dps.base + wave * dps.perWave : 0;
 }
 
-export function terrainDamage(type: TileType | undefined, wave: number, stepMs: number): number {
-  return (terrainDamagePerSec(type, wave) * stepMs) / 1000;
+export function terrainDamage(type: TileType | undefined, wave: number, stepMs: number, fireproof = false): number {
+  return (terrainDamagePerSec(type, wave, fireproof) * stepMs) / 1000;
 }
 
-export function terrainSpeedMultiplier(type: TileType | undefined, ignoresGravel: boolean): number {
-  if (!type || (type === 'gravel' && ignoresGravel)) return 1;
+export function terrainSpeedMultiplier(type: TileType | undefined, slowImmune: readonly TileType[] = []): number {
+  if (!type || slowImmune.includes(type)) return 1;
   return TILE_TYPES[type].speedMultiplier;
 }

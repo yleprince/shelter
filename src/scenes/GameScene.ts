@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import {
+  AURA_TICK_MS,
   GAME_WIDTH,
   GRID_COLS,
   GRID_ROWS,
@@ -21,6 +22,7 @@ import { Enemy, type EnemyNavigator } from '../entities/Enemy';
 import { Projectile } from '../entities/Projectile';
 import { Shelter } from '../entities/Shelter';
 import { Tower } from '../entities/Tower';
+import { computeAuras } from '../systems/Auras';
 import { Economy } from '../systems/Economy';
 import { GameClock } from '../systems/GameClock';
 import { KeySequence, keyToken } from '../systems/KeySequence';
@@ -37,11 +39,14 @@ import {
   type EditContext,
 } from '../systems/TileEditor';
 import { TileCursor } from '../systems/TileCursor';
+import { themeForWave, type EnemySpec } from '../systems/WaveComposer';
 import { WaveManager } from '../systems/WaveManager';
 import {
   editBlockerText,
+  enemyIntro,
   repairBlockerText,
   shelterUpgradeBlockerText,
+  themeIntro,
   tileTypeDescription,
   upgradeBlockerText,
 } from '../ui/labels';
@@ -116,6 +121,10 @@ export class GameScene extends Phaser.Scene {
   private messageMs = 0;
   private isOver = false;
   private killPopups = 0;
+  private auraMs = 0;
+  private introWave = 0;
+  // Kinds and themes already introduced this game: the intro line shows once each.
+  private readonly introduced = new Set<string>();
 
   constructor() {
     super('GameScene');
@@ -150,6 +159,9 @@ export class GameScene extends Phaser.Scene {
     this.projectiles = [];
     this.tileImages = [];
     this.killPopups = 0;
+    this.auraMs = 0;
+    this.introWave = 0;
+    this.introduced.clear();
     this.selectedTower = undefined;
     this.tileMenu = undefined;
     this.previewRoute = undefined;
@@ -402,18 +414,34 @@ export class GameScene extends Phaser.Scene {
     this.score.tick(deltaMs);
     let droppedSpeed = false;
 
-    for (const spec of this.waves.update(deltaMs, this.enemies.length)) {
+    const intros: string[] = [];
+    const spawned = this.waves.update(deltaMs, this.enemies.length);
+    if (this.waves.wave !== this.introWave) {
+      this.introWave = this.waves.wave;
+      this.introduce(themeForWave(this.introWave).id, themeIntro(themeForWave(this.introWave)), intros);
+    }
+    for (const spec of spawned) {
+      this.introduce(spec.kind, enemyIntro(spec.kind), intros);
       this.enemies.push(new Enemy(this, this.nav, spec, this.grid.tileToWorld(this.grid.leadIn), this.grid.entry));
     }
+    if (intros.length > 0) this.say(intros.join('   '));
 
-    // A splitter burned to death pushes its children onto this list; they start next step.
+    this.auraMs += deltaMs;
+    if (this.auraMs >= AURA_TICK_MS) {
+      this.applyAuras(this.auraMs);
+      this.auraMs = 0;
+    }
+
+    // Children (splitter burned to death, spawner minions) are pushed onto this list; they
+    // start next step.
     for (const enemy of [...this.enemies]) {
       enemy.update(deltaMs);
+      this.spawnChildren(enemy, enemy.takeSpawns());
       if (enemy.reachedEnd && enemy.isAlive) {
         this.shelter.takeDamage(enemy.damage);
         enemy.destroy();
         if (this.clock.dropToBaseSpeed()) droppedSpeed = true;
-      } else if (enemy.burn(terrainDamage(this.nav.tileTypeAt(enemy), this.waves.wave, deltaMs))) {
+      } else if (enemy.burn(terrainDamage(this.nav.tileTypeAt(enemy), this.waves.wave, deltaMs, enemy.fireproof))) {
         this.onEnemyKilled(enemy);
       }
     }
@@ -447,13 +475,34 @@ export class GameScene extends Phaser.Scene {
     this.score.addKill(multiplier > 1);
     if (multiplier > 1) this.showKillPopup(enemy.x, enemy.y, multiplier);
     this.economy.earn(enemy.reward);
-    // Children spawn outside the wave queue; WaveManager still waits for them because it
-    // counts every live enemy before calling the wave cleared.
-    enemy.splitsInto.forEach((spec, i) => {
-      const child = new Enemy(this, this.nav, spec, { x: enemy.x, y: enemy.y }, enemy.target);
+    this.spawnChildren(enemy, enemy.splitsInto);
+  }
+
+  // Children spawn outside the wave queue; WaveManager still waits for them because it
+  // counts every live enemy before calling the wave cleared.
+  private spawnChildren(parent: Enemy, specs: readonly EnemySpec[]): void {
+    specs.forEach((spec, i) => {
+      const child = new Enemy(this, this.nav, spec, { x: parent.x, y: parent.y }, parent.target);
       child.advanceBy(i * SPLITTER_CHILD_SPACING_PX);
       this.enemies.push(child);
     });
+  }
+
+  private applyAuras(elapsedMs: number): void {
+    const active = this.enemies.filter((e) => e.isAlive && !e.dormant);
+    const effects = computeAuras(active, this.towers);
+    active.forEach((enemy, i) => {
+      enemy.warBuff = effects.war[i];
+      const heal = effects.healRatioPerSec[i];
+      if (heal > 0) enemy.heal((heal * elapsedMs) / 1000);
+    });
+    this.towers.forEach((tower, i) => tower.setCooldownMultiplier(effects.cooldownMultiplier[i]));
+  }
+
+  private introduce(key: string, text: string | undefined, intros: string[]): void {
+    if (!text || this.introduced.has(key)) return;
+    this.introduced.add(key);
+    intros.push(text);
   }
 
   private showKillPopup(x: number, y: number, multiplier: number): void {
