@@ -2,8 +2,10 @@ import Phaser from 'phaser';
 import { GAME_OVER_INPUT_DELAY_MS, GAME_WIDTH, KEY_SEQUENCE_TIMEOUT_MS } from '../config';
 import { GAME_OVER_BINDINGS, keyHint } from '../data/keybindings';
 import type { MapDefinition } from '../data/maps';
+import { formatBestScore, isNewBest } from '../systems/BestScore';
 import { KeySequence, keyToken } from '../systems/KeySequence';
 import type { ScoreBreakdown } from '../systems/ScoreManager';
+import { readBestScore, writeBestScore } from '../ui/bestScoreCookie';
 import type { GameSceneData } from './MapSelectScene';
 
 export interface GameOverData {
@@ -47,6 +49,21 @@ export class GameOverScene extends Phaser.Scene {
       )
       .setOrigin(0.5);
     this.add.text(cx, 420, `SCORE ${breakdown.total}`, { ...style, fontSize: '36px', color: '#ffd166' }).setOrigin(0.5);
+    const stored = readBestScore();
+    if (isNewBest(breakdown.total, stored)) {
+      writeBestScore({ score: breakdown.total, mapId: map.id, wave });
+      this.add
+        .text(cx, 462, 'NEW BEST!', {
+          ...style,
+          fontSize: '22px',
+          color: '#1c1a16',
+          backgroundColor: '#ffd166',
+          padding: { x: 8, y: 2 },
+        })
+        .setOrigin(0.5);
+    } else if (stored) {
+      this.add.text(cx, 462, formatBestScore(stored), { ...style, fontSize: '18px', color: '#9c9480' }).setOrigin(0.5);
+    }
 
     const retry = () => this.scene.start('GameScene', { mapId: map.id } satisfies GameSceneData);
     const changeMap = () => this.scene.start('MapSelectScene');

@@ -75,3 +75,8 @@ export const STATUS_MESSAGE_MS = 2500;
 export const SURVIVAL_POINTS_PER_SEC = 1;
 export const POINTS_PER_KILL = 10;
 export const POINTS_PER_SAVED_CURRENCY = 0.5;
+
+// One best score per browser, across all maps (the score already includes the map multiplier).
+export const BEST_SCORE_COOKIE_NAME = 'shelter_best';
+export const BEST_SCORE_COOKIE_MAX_AGE_S = 365 * 24 * 60 * 60;
+export const BEST_SCORE_SEPARATOR = '|';

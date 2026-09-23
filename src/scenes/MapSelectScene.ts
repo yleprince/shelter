@@ -2,8 +2,10 @@ import Phaser from 'phaser';
 import { GAME_WIDTH, GRID_COLS, GRID_ROWS, HUD_ROWS, KEY_SEQUENCE_TIMEOUT_MS, STATUS_ROWS, TILE_SIZE } from '../config';
 import { MAP_SELECT_BINDINGS, type MapSelectAction } from '../data/keybindings';
 import { MAPS, shelterTile, type MapDefinition } from '../data/maps';
+import { formatBestScore } from '../systems/BestScore';
 import { KeySequence, keyToken } from '../systems/KeySequence';
 import { MapGrid } from '../systems/MapGrid';
+import { readBestScore } from '../ui/bestScoreCookie';
 import { createHelpOverlay } from '../ui/HelpOverlay';
 
 export interface GameSceneData {
@@ -39,6 +41,10 @@ export class MapSelectScene extends Phaser.Scene {
     MAPS.forEach((map, i) => this.addCard(map, i, left + i * (CARD_WIDTH + CARD_GAP), 190));
     this.highlight(0);
 
+    const best = readBestScore();
+    if (best) {
+      this.add.text(GAME_WIDTH / 2, 540, formatBestScore(best), { ...TEXT_STYLE, fontSize: '18px', color: '#ffd166' }).setOrigin(0.5);
+    }
     this.add
       .text(GAME_WIDTH / 2, 580, 'Harder maps have shorter paths and a higher score multiplier', {
         ...TEXT_STYLE,

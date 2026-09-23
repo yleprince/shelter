@@ -67,6 +67,7 @@ shelter/
     ui/
       HelpOverlay.ts       # help overlay generated from data/keybindings.ts
       labels.ts            # player-facing text for blockers and tile types
+      bestScoreCookie.ts   # the only code touching document.cookie (best score)
     systems/
       WaveManager.ts       # wave phases (breather → spawning → clearing), spawn queue
       WaveComposer.ts      # pure functions: tier/special mix, interleaving, boss waves,
@@ -80,6 +81,7 @@ shelter/
       UpgradePlan.ts       # next-level blocker and max-upgrade plan over any level table
       Economy.ts           # currency balance, earn/spend
       ScoreManager.ts       # tracks survival time, kills, computes final score breakdown
+      BestScore.ts         # best-score record: parse, serialize, format, "new best"
       MapGrid.ts           # tile-type grid, occupied tiles, tile↔world
       PathField.ts         # Dijkstra from the shelter: fastest next tile from anywhere
       TileFollower.ts      # walks tile centre to tile centre, asking for the next tile
@@ -251,6 +253,13 @@ reward. The game over kills line counts all kills; ice kills get their own line.
 computed once and shown on `GameOverScene`. Point weights are constants in
 `config.ts`.
 
+One **best score** per browser (all maps) is kept in the `shelter_best` cookie as
+URI-encoded `score|mapId|wave`, path-scoped to the resolved Vite base URL, for a year.
+Game over saves a strictly higher score and shows `NEW BEST!` or the stored best; map
+select shows the best when there is one. `BestScore` is plain TS; only
+`ui/bestScoreCookie.ts` touches `document.cookie`. Missing, malformed or blocked
+cookies mean "no best yet" and never throw.
+
 ### Controls
 - The whole game is playable by keyboard or mouse. **`src/data/keybindings.ts` is the
   source of truth** for keys: scenes resolve key presses through it (`KeySequence`,
@@ -279,6 +288,6 @@ Do not build these unless asked — they're intentionally deferred:
 - Tech tree beyond the linear Lv1–Lv8 upgrades
 - Multiple lanes / enemies splitting across routes
 - Multiple entries or shelters
-- Persistent anything (e.g. a localStorage leaderboard; the "Press ? for controls"
-  hint uses an in-memory flag)
+- Persistence beyond the best-score cookie (e.g. a leaderboard, saved games; the
+  "Press ? for controls" hint uses an in-memory flag)
 - Sound design beyond basic SFX
