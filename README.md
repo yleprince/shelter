@@ -31,6 +31,9 @@ longer you survive, the more points you bank.
 - The game ends when the shelter's HP hits zero.
 - Your final score combines how long you survived, how many enemies you killed and
   how much scrap you had saved up, times the map multiplier.
+- Enter a **name** on the map screen (`n`) to join the online **leaderboard** (`t`):
+  every game is saved with its score, date and duration. The top scores are shown
+  for all maps and for each map, alongside your last games.
 
 ## Controls
 
@@ -60,12 +63,19 @@ All bindings live in `src/data/keybindings.ts`.
 
 ## Getting Started
 
+Needs Node 24 (`nvm use`).
+
 ```bash
 npm install
 npm run dev
 ```
 
-Then open the printed local URL in your browser.
+Then open the printed local URL in your browser. For the leaderboard, also run the
+scores API in a second terminal (it stores games in `data/shelter.db`):
+
+```bash
+npm run api
+```
 
 ## Scripts
 
@@ -75,6 +85,7 @@ Then open the printed local URL in your browser.
 | `npm run build`       | Type-check and build for production       |
 | `npm run preview`      | Preview the production build locally       |
 | `npm run typecheck`     | Run TypeScript checks without building     |
+| `npm run api`           | Run the scores API on port 3000            |
 | `npm test`              | Run the unit tests once                    |
 
 ## Deployment
@@ -86,15 +97,30 @@ npm run build
 # publish dist/ to the gh-pages branch (or your CI of choice)
 ```
 
+On GitHub Pages there's no API: the game works the same, and the leaderboard shows
+as offline.
+
 ### Docker
 
-The image runs the tests, builds the game and serves `dist/` with nginx on port 80.
+`docker compose` runs two services:
+
+- `shelter`: the image runs the tests, builds the game and serves `dist/` with nginx on
+  port 80. It proxies `/api/` to the API.
+- `api`: the scores API (`server/`, plain Node 24). The database is a single SQLite
+  file on the `shelter-data` volume.
 
 ```bash
 docker compose up --build -d   # then open http://localhost:8080
-# or
-docker build -t shelter . && docker run --rm -p 8080:80 shelter
 ```
+
+Back up the scores by copying the database file out of the volume:
+
+```bash
+docker compose cp api:/data/shelter.db ./shelter-backup.db
+```
+
+The web image also runs alone (`docker build -t shelter . && docker run --rm -p
+8080:80 shelter`), with the leaderboard offline.
 
 ## Balancing
 

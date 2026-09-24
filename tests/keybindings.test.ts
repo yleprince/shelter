@@ -3,7 +3,7 @@ import { GAME_SPEEDS } from '../src/config';
 import { GAME_BINDINGS, KEY_BINDINGS, tileEditAction, type BindingScene } from '../src/data/keybindings';
 import { TILE_TYPE_ORDER, TILE_TYPES } from '../src/data/tileTypes';
 
-const SCENES: BindingScene[] = ['game', 'mapSelect', 'gameOver'];
+const SCENES: BindingScene[] = ['game', 'mapSelect', 'gameOver', 'leaderboard'];
 
 describe.each(SCENES)('%s key bindings', (scene) => {
   const sequences = KEY_BINDINGS.filter((b) => b.scene === scene).flatMap((b) => b.sequences.map((s) => s.join(' ')));

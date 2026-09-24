@@ -5,17 +5,22 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "npm run typecheck && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p server",
+    "test": "vitest run",
+    "api": "node --watch server/main.ts"
   },
   "dependencies": {
     "phaser": "^3.90.0"
   },
   "devDependencies": {
+    "@types/node": "^24.13.6",
     "typescript": "~5.9.3",
     "vite": "^6.4.3",
     "vitest": "^3.2.7"
+  },
+  "engines": {
+    "node": ">=24"
   }
 }

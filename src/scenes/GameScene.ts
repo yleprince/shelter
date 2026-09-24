@@ -120,6 +120,7 @@ export class GameScene extends Phaser.Scene {
   private message = '';
   private messageMs = 0;
   private isOver = false;
+  private startedAt = 0;
   private killPopups = 0;
   private auraMs = 0;
   private introWave = 0;
@@ -170,6 +171,7 @@ export class GameScene extends Phaser.Scene {
     this.messageMs = 0;
     this.keys.reset();
     this.isOver = false;
+    this.startedAt = Date.now();
   }
 
   create(): void {
@@ -530,6 +532,7 @@ export class GameScene extends Phaser.Scene {
       breakdown: this.score.computeFinal(this.economy.balance, this.map.scoreMultiplier),
       wave: this.waves.wave,
       map: this.map,
+      durationMs: Date.now() - this.startedAt,
     };
     this.scene.stop('UIScene');
     this.scene.start('GameOverScene', data);

@@ -3,4 +3,18 @@ services:
     build: .
     ports:
       - "8080:80"
+    depends_on:
+      - api
     restart: unless-stopped
+
+  # Scores API. The database is a single SQLite file on the shelter-data volume.
+  api:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    volumes:
+      - shelter-data:/data
+    restart: unless-stopped
+
+volumes:
+  shelter-data:

@@ -16,7 +16,8 @@ game speed, tower levels, enemy tiers and boss waves, selling, shelter repair) a
 `docs/specs/progression-2.md` (pause, keyboard/vim play with a help menu, tile editing,
 tiers T6–T8, special enemies, tower Lv6–Lv8) and `docs/specs/progression-3.md` (speeds,
 best score, shelter upgrades, water/fire/ice tiles, max upgrade, late-game specials,
-boss types and wave themes) are implemented. This file describes the architecture and conventions so that further work
+boss types and wave themes) and `docs/specs/online-scores.md` (username, leaderboard,
+game history in a SQLite-backed API) are implemented. This file describes the architecture and conventions so that further work
 stays consistent.
 
 ## Tech Stack
@@ -31,18 +32,27 @@ stays consistent.
   towers/path tiles, a zombie/survivor pack for enemies and the shelter), recolored for
   a post-apocalyptic tone — load them in `BootScene` under the same `TEXTURES` keys and
   nothing else needs to change. No paid or unlicensed assets.
-- Deployment target: GitHub Pages, built from the Vite `dist/` output. A `Dockerfile`
-  also packages the same build behind nginx for self-hosting.
+- **Node 24** (`.nvmrc`) for tooling and the scores API: `server/` runs its `.ts`
+  files directly with Node's type stripping and stores games in SQLite via the
+  built-in `node:sqlite`. No npm dependencies on the server.
+- Deployment target: GitHub Pages, built from the Vite `dist/` output (no API there:
+  the game shows the leaderboard as offline). A `Dockerfile` also packages the same
+  build behind nginx, and `docker-compose.yml` adds the API with its database.
 
 ## Commands
 
 - `npm run dev` — start the Vite dev server with HMR
 - `npm run build` — type-check and build production bundle to `dist/`
 - `npm run preview` — preview the production build locally
-- `npm run typecheck` — run `tsc --noEmit`
+- `npm run typecheck` — type-check the game (`tsc --noEmit`) and the server
+  (`-p server`)
+- `npm run api` — run the scores API on port 3000 (`data/shelter.db`); `npm run dev`
+  proxies `/api` to it
 - `npm test` — run the Vitest suite in `tests/` once
-- `docker compose up --build` — build the image (tests + production build in a Node
-  stage, `dist/` served by nginx using `docker/nginx.conf`) and serve it on port 8080
+- `docker compose up --build` — build and run both services: `shelter` (tests +
+  production build in a Node stage, `dist/` served by nginx using `docker/nginx.conf`,
+  which proxies `/api/`) on port 8080, and `api` (`server/Dockerfile`) with the SQLite
+  file on the `shelter-data` volume
 
 ## Project Structure
 
@@ -53,9 +63,20 @@ shelter/
   tsconfig.json
   vite.config.ts
   Dockerfile           # node build stage → nginx serving dist/
-  docker-compose.yml   # serves the image on port 8080
+  docker-compose.yml   # web on port 8080 + api with the shelter-data volume
   docker/
-    nginx.conf
+    nginx.conf         # static files, /api/ proxied to the api service
+  shared/              # imported by both the game and the server (no imports of its own)
+    api.ts             # request/response types of the scores API
+    username.ts        # username rules: normalizeUsername, USERNAME_MAX_LENGTH
+  server/              # scores API: Node 24, node:http + node:sqlite, no dependencies
+    Dockerfile
+    tsconfig.json      # NodeNext, erasable syntax only, .ts import extensions
+    main.ts            # bootstrap: env PORT / DB_PATH, graceful shutdown
+    app.ts             # routes: /api/health, /api/games, /api/leaderboard
+    GameStore.ts       # SQLite schema and queries (every game; best per player)
+    validation.ts      # request parsing
+    config.ts          # server limits
   public/
     assets/            # (empty for now) sprite sheets, audio, favicon — served as-is
   src/
@@ -67,7 +88,8 @@ shelter/
       GameScene.ts        # core gameplay: fixed-step loop, key dispatch, cursor, placement,
                           #   tile edits, enemies, shelter, pause
       UIScene.ts          # HUD, status line, tower panel, tile panel, help overlay
-      GameOverScene.ts     # final score breakdown, retry same map / change map
+      GameOverScene.ts     # final score breakdown, saves the game, retry / change map
+      LeaderboardScene.ts  # top scores + your last games, overlay over the paused scene
     entities/
       Enemy.ts
       Tower.ts
@@ -77,6 +99,9 @@ shelter/
       HelpOverlay.ts       # help overlay generated from data/keybindings.ts
       labels.ts            # player-facing text for blockers and tile types
       bestScoreCookie.ts   # the only code touching document.cookie (best score)
+      usernameStorage.ts   # the only code touching localStorage (username)
+    net/
+      scoreApi.ts          # the only code calling the API; null on any failure
     systems/
       WaveManager.ts       # wave phases (breather → spawning → clearing), spawn queue
       WaveComposer.ts      # pure functions: tier/special mix, interleaving, boss waves,
@@ -94,6 +119,7 @@ shelter/
       Economy.ts           # currency balance, earn/spend
       ScoreManager.ts       # tracks survival time, kills, computes final score breakdown
       BestScore.ts         # best-score record: parse, serialize, format, "new best"
+      Leaderboard.ts       # leaderboard / history row formatting, save result line
       MapGrid.ts           # tile-type grid, occupied tiles, tile↔world
       PathField.ts         # Dijkstra from the shelter: fastest next tile from anywhere
       TileFollower.ts      # walks tile centre to tile centre, asking for the next tile
@@ -110,6 +136,7 @@ shelter/
       tileTypes.ts          # tile types: walkable, speed, edit cost/key, unlock wave
       textures.ts          # texture keys and render depths
   tests/                 # Vitest specs for the plain-TS systems and data tables
+    server/              # API specs: validation, GameStore (in-memory SQLite), HTTP
   docs/specs/            # feature specs
   CLAUDE.md
   README.md
@@ -298,6 +325,29 @@ select shows the best when there is one. `BestScore` is plain TS; only
 `ui/bestScoreCookie.ts` touches `document.cookie`. Missing, malformed or blocked
 cookies mean "no best yet" and never throw.
 
+### Online scores
+- The API (`server/`) stores **every finished game** in one SQLite table: username (or
+  null), map, score, wave, kills, simulated survival seconds, real duration in ms, and
+  `played_at` stamped by the server. The leaderboard is derived from it: each named
+  player's best game, for all maps or one map, with competition ranking. Names are
+  case-insensitive. Anonymous games are stored but kept off the leaderboard.
+- The game reaches the API at `api/` relative to the page (nginx and the Vite dev server
+  proxy it). `net/scoreApi.ts` resolves every call to null on failure or after
+  `API_TIMEOUT_MS`. The game must keep working with no API (GitHub Pages) and shows
+  "Leaderboard offline" instead.
+- The name field on the map screen is an HTML `<input>` (Phaser DOM container,
+  `dom.createContainer`). Key handlers ignore keys typed into it except Enter/Escape.
+  Global key capture is off while it has focus, and it's hidden while the scene is
+  paused under the leaderboard, because the DOM layer draws above the canvas.
+- `GameOverScene` saves the game once in `create`. The leaderboard opens as an overlay
+  (`scene.pause()` + `scene.launch`) and resumes the scene underneath on close. Never
+  restart game over to return to it, or the game would be saved twice.
+- Username rules live in `shared/username.ts`, used by both sides. There's no auth or
+  anti-cheat: scores are client-reported (see the spec's decisions).
+- `shared/` and `server/` files use `.ts` import extensions and erasable syntax only
+  (Node runs them unbuilt). `server/` never imports from `src/`. Server tests run on
+  an in-memory database.
+
 ### Controls
 - The whole game is playable by keyboard or mouse. **`src/data/keybindings.ts` is the
   source of truth** for keys: scenes resolve key presses through it (`KeySequence`,
@@ -326,6 +376,6 @@ Do not build these unless asked — they're intentionally deferred:
 - Tech tree beyond the linear Lv1–Lv8 upgrades
 - Multiple lanes / enemies splitting across routes
 - Multiple entries or shelters
-- Persistence beyond the best-score cookie (e.g. a leaderboard, saved games; the
-  "Press ? for controls" hint uses an in-memory flag)
+- Persistence beyond the best-score cookie and the online scores (e.g. saved games,
+  accounts; the "Press ? for controls" hint uses an in-memory flag)
 - Sound design beyond basic SFX

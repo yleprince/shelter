@@ -6,3 +6,4 @@ dist
 Dockerfile
 .dockerignore
 docker-compose.yml
+data

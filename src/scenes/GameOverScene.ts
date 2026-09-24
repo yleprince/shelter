@@ -2,18 +2,25 @@ import Phaser from 'phaser';
 import { GAME_OVER_INPUT_DELAY_MS, GAME_WIDTH, KEY_SEQUENCE_TIMEOUT_MS } from '../config';
 import { GAME_OVER_BINDINGS, keyHint } from '../data/keybindings';
 import type { MapDefinition } from '../data/maps';
+import { submitGame } from '../net/scoreApi';
 import { formatBestScore, isNewBest } from '../systems/BestScore';
 import { KeySequence, keyToken } from '../systems/KeySequence';
+import { saveResultLine } from '../systems/Leaderboard';
 import type { ScoreBreakdown } from '../systems/ScoreManager';
 import { readBestScore, writeBestScore } from '../ui/bestScoreCookie';
+import { readUsername } from '../ui/usernameStorage';
+import type { LeaderboardSceneData } from './LeaderboardScene';
 import type { GameSceneData } from './MapSelectScene';
 
 export interface GameOverData {
   breakdown: ScoreBreakdown;
   wave: number;
   map: MapDefinition;
+  // Real time played, pauses included (the breakdown's survival time is simulated time).
+  durationMs: number;
 }
 
+const BUTTON_GAP = 24;
 const BUTTON_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
   fontFamily: 'monospace',
   fontSize: '20px',
@@ -27,7 +34,7 @@ export class GameOverScene extends Phaser.Scene {
     super('GameOverScene');
   }
 
-  create({ breakdown, wave, map }: GameOverData): void {
+  create({ breakdown, wave, map, durationMs }: GameOverData): void {
     const cx = GAME_WIDTH / 2;
     const style = { fontFamily: 'monospace', color: '#e0d6b8' };
 
@@ -65,18 +72,43 @@ export class GameOverScene extends Phaser.Scene {
       this.add.text(cx, 462, formatBestScore(stored), { ...style, fontSize: '18px', color: '#9c9480' }).setOrigin(0.5);
     }
 
+    // Saved once, here: the leaderboard opens over this scene rather than restarting it.
+    const username = readUsername();
+    const saveStatus = this.add.text(cx, 496, 'Saving…', { ...style, fontSize: '16px', color: '#9c9480' }).setOrigin(0.5);
+    const saving = submitGame({
+      username,
+      mapId: map.id,
+      score: breakdown.total,
+      wave,
+      kills: breakdown.kills,
+      survivalSeconds: breakdown.survivalSeconds,
+      durationMs,
+    }).then((result) => {
+      if (saveStatus.active) saveStatus.setText(saveResultLine(result, username));
+    });
+
     const retry = () => this.scene.start('GameScene', { mapId: map.id } satisfies GameSceneData);
     const changeMap = () => this.scene.start('MapSelectScene');
-    this.add
-      .text(cx - 20, 520, `Retry [${keyHint(GAME_OVER_BINDINGS, 'retry')}]`, BUTTON_STYLE)
-      .setOrigin(1, 0.5)
-      .setInteractive({ useHandCursor: true })
-      .once(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, retry);
-    this.add
-      .text(cx + 20, 520, `Change map [${keyHint(GAME_OVER_BINDINGS, 'changeMap')}]`, BUTTON_STYLE)
-      .setOrigin(0, 0.5)
-      .setInteractive({ useHandCursor: true })
-      .once(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, changeMap);
+    const leaderboard = () => {
+      this.scene.pause();
+      this.scene.launch('LeaderboardScene', { returnTo: this.scene.key, username, after: saving } satisfies LeaderboardSceneData);
+    };
+    const buttons = [
+      this.add
+        .text(0, 552, `Retry [${keyHint(GAME_OVER_BINDINGS, 'retry')}]`, BUTTON_STYLE)
+        .once(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, retry),
+      this.add
+        .text(0, 552, `Change map [${keyHint(GAME_OVER_BINDINGS, 'changeMap')}]`, BUTTON_STYLE)
+        .once(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, changeMap),
+      this.add
+        .text(0, 552, `Top scores [${keyHint(GAME_OVER_BINDINGS, 'leaderboard')}]`, BUTTON_STYLE)
+        .on(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, leaderboard),
+    ];
+    let x = cx - (buttons.reduce((sum, b) => sum + b.width, 0) + BUTTON_GAP * (buttons.length - 1)) / 2;
+    for (const button of buttons) {
+      button.setOrigin(0, 0.5).setX(x).setInteractive({ useHandCursor: true });
+      x += button.width + BUTTON_GAP;
+    }
 
     const keys = new KeySequence(GAME_OVER_BINDINGS, KEY_SEQUENCE_TIMEOUT_MS);
     // Space also pauses in game: a press meant for the game must not skip the score.
@@ -88,6 +120,7 @@ export class GameOverScene extends Phaser.Scene {
       if (result.kind !== 'action') return;
       if (result.action === 'retry') retry();
       else if (result.action === 'changeMap') changeMap();
+      else if (result.action === 'leaderboard') leaderboard();
     });
   }
 }

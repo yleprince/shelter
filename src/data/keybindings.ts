@@ -6,7 +6,7 @@ import { TILE_TYPE_ORDER, TILE_TYPES, type TileType } from './tileTypes';
 // Keys are KeyboardEvent.key values ('h', 'H', '$', '?', 'Enter'), with ' ' written as
 // 'Space'. A sequence of several keys is typed in order, like vim's gg or dd.
 
-export type BindingScene = 'game' | 'mapSelect' | 'gameOver';
+export type BindingScene = 'game' | 'mapSelect' | 'gameOver' | 'leaderboard';
 export type BindingGroup = 'Move' | 'Build' | 'Tiles' | 'Game' | 'Menu';
 
 export type GameAction =
@@ -48,11 +48,23 @@ export function tileEditAction(type: TileType): TileEditAction {
   return `tile${type[0].toUpperCase()}${type.slice(1)}` as TileEditAction;
 }
 
-export type MapSelectAction = 'prevMap' | 'nextMap' | 'startMap' | 'map1' | 'map2' | 'map3' | 'help' | 'cancel';
+export type MapSelectAction =
+  | 'prevMap'
+  | 'nextMap'
+  | 'startMap'
+  | 'map1'
+  | 'map2'
+  | 'map3'
+  | 'editName'
+  | 'leaderboard'
+  | 'help'
+  | 'cancel';
 
-export type GameOverAction = 'retry' | 'changeMap';
+export type GameOverAction = 'retry' | 'changeMap' | 'leaderboard';
 
-export type KeyAction = GameAction | MapSelectAction | GameOverAction;
+export type LeaderboardAction = 'prevBoard' | 'nextBoard' | 'close';
+
+export type KeyAction = GameAction | MapSelectAction | GameOverAction | LeaderboardAction;
 
 export interface KeyBinding<A extends KeyAction = KeyAction> {
   scene: BindingScene;
@@ -131,6 +143,8 @@ export const MAP_SELECT_BINDINGS: readonly KeyBinding<MapSelectAction>[] = [
   mapSelect('map1', seq('1'), 'Play map 1'),
   mapSelect('map2', seq('2'), 'Play map 2'),
   mapSelect('map3', seq('3'), 'Play map 3'),
+  mapSelect('editName', seq('n'), 'Edit your name (Enter to save, Esc to cancel)'),
+  mapSelect('leaderboard', seq('t'), 'Top scores'),
   mapSelect('help', seq('?'), 'Toggle this help'),
   mapSelect('cancel', seq('Escape'), 'Close help'),
 ];
@@ -138,9 +152,30 @@ export const MAP_SELECT_BINDINGS: readonly KeyBinding<MapSelectAction>[] = [
 export const GAME_OVER_BINDINGS: readonly KeyBinding<GameOverAction>[] = [
   { scene: 'gameOver', group: 'Menu', sequences: seq('Space', 'Enter'), action: 'retry', description: 'Retry this map' },
   { scene: 'gameOver', group: 'Menu', sequences: seq('m'), action: 'changeMap', description: 'Change map' },
+  { scene: 'gameOver', group: 'Menu', sequences: seq('t'), action: 'leaderboard', description: 'Top scores' },
 ];
 
-export const KEY_BINDINGS: readonly KeyBinding[] = [...GAME_BINDINGS, ...MAP_SELECT_BINDINGS, ...GAME_OVER_BINDINGS];
+const leaderboard = (action: LeaderboardAction, sequences: string[][], description: string): KeyBinding<LeaderboardAction> => ({
+  scene: 'leaderboard',
+  group: 'Menu',
+  sequences,
+  action,
+  description,
+  repeatable: action !== 'close',
+});
+
+export const LEADERBOARD_BINDINGS: readonly KeyBinding<LeaderboardAction>[] = [
+  leaderboard('prevBoard', seq('h', 'ArrowLeft'), 'Previous board'),
+  leaderboard('nextBoard', seq('l', 'ArrowRight'), 'Next board'),
+  leaderboard('close', seq('Escape', 'q', 't'), 'Close'),
+];
+
+export const KEY_BINDINGS: readonly KeyBinding[] = [
+  ...GAME_BINDINGS,
+  ...MAP_SELECT_BINDINGS,
+  ...GAME_OVER_BINDINGS,
+  ...LEADERBOARD_BINDINGS,
+];
 
 const KEY_LABELS: Readonly<Record<string, string>> = {
   ArrowLeft: '←',

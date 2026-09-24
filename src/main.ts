@@ -5,6 +5,7 @@ import { MapSelectScene } from './scenes/MapSelectScene';
 import { GameScene } from './scenes/GameScene';
 import { UIScene } from './scenes/UIScene';
 import { GameOverScene } from './scenes/GameOverScene';
+import { LeaderboardScene } from './scenes/LeaderboardScene';
 
 new Phaser.Game({
   type: Phaser.AUTO,
@@ -17,8 +18,12 @@ new Phaser.Game({
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
+  // The name field on the map screen is a real <input>, positioned by Phaser.
+  dom: {
+    createContainer: true,
+  },
   physics: {
     default: 'arcade',
   },
-  scene: [BootScene, MapSelectScene, GameScene, UIScene, GameOverScene],
+  scene: [BootScene, MapSelectScene, GameScene, UIScene, GameOverScene, LeaderboardScene],
 });

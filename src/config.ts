@@ -91,3 +91,10 @@ export const POINTS_PER_SAVED_CURRENCY = 0.5;
 export const BEST_SCORE_COOKIE_NAME = 'shelter_best';
 export const BEST_SCORE_COOKIE_MAX_AGE_S = 365 * 24 * 60 * 60;
 export const BEST_SCORE_SEPARATOR = '|';
+
+// Online scores (the API in server/, reached at api/ next to the page). Every call gives
+// up after this long: an unreachable server only means the leaderboard shows as offline.
+export const API_TIMEOUT_MS = 5000;
+export const LEADERBOARD_SIZE = 10;
+export const RECENT_GAMES_SIZE = 6;
+export const USERNAME_STORAGE_KEY = 'shelter_username';
